@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#B9BEC7">
+<title>Air Hockey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*
+  Design tokens
+  ------------------------------------------------------------
+  The table is the hero: a cobalt enamel playfield punched with
+  a fine air-hole grid, birch plywood rails, cast-resin mallets.
+  It sits in a cool grey photo studio. The UI is quiet ink on grey
+  so the object carries the colour.
+*/
+:root{
+  --studio-hi:#D2D6DC;
+  --studio-lo:#959CA7;
+  --ink:#1A2140;          /* deep cobalt ink, derived from the field */
+  --ink-soft:#4A5270;
+  --paper:#F3F5FA;
+  --cobalt:#2343C8;
+  --saffron:#FFB21E;      /* you */
+  --flamingo:#FF6F8E;     /* them */
+  --display:"Big Shoulders Display", "Arial Narrow", sans-serif;
+  --text:"Schibsted Grotesk", system-ui, sans-serif;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px);
+  --safe-r:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
+body{
+  font-family:var(--text);
+  color:var(--ink);
+  background:
+    radial-gradient(120% 80% at 50% 38%, var(--studio-hi) 0%, #BCC1C9 48%, var(--studio-lo) 100%);
+  -webkit-font-smoothing:antialiased;
+  -webkit-tap-highlight-color:transparent;
+}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:none}
+body.menu canvas#c{cursor:default}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
+body.playing #hud{opacity:1}
+.score{
+  position:absolute;
+  top:calc(14px + var(--safe-t));
+  left:calc(18px + var(--safe-l));
+  display:grid;gap:2px;
+  font-family:var(--display);
+  font-weight:800;
+  font-size:clamp(44px, 7vh, 72px);
+  line-height:.86;
+  font-variant-numeric:tabular-nums;
+}
+.score .row{display:flex;align-items:center;gap:.22em}
+.score .chip{
+  width:.26em;height:.26em;border-radius:50%;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.18), 0 1px 2px rgba(26,33,64,.25);
+}
+.score .opp .chip{background:var(--flamingo)}
+.score .me  .chip{background:var(--saffron)}
+.score .opp{color:var(--ink-soft)}
+.score .num{display:inline-block;min-width:.6em}
+.score .num.bump{animation:bump .6s cubic-bezier(.2,.9,.25,1.2)}
+@keyframes bump{0%{transform:translateY(-.35em);opacity:0}100%{transform:none;opacity:1}}
+.score .to{
+  font-family:var(--text);font-weight:500;font-size:12px;letter-spacing:.01em;
+  color:var(--ink-soft);margin-top:8px;line-height:1.2
+}
+.netinfo{
+  position:absolute;left:calc(18px + var(--safe-l));bottom:calc(14px + var(--safe-b));
+  font-size:12px;font-weight:500;color:var(--ink-soft);
+  display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums
+}
+.netinfo .dot{width:7px;height:7px;border-radius:50%;background:#3BA776}
+.netinfo.warn .dot{background:#E3A11B}
+.netinfo.bad .dot{background:#D9473B}
+#leave{
+  pointer-events:auto;position:absolute;
+  top:calc(14px + var(--safe-t));right:calc(14px + var(--safe-r));
+  font:500 14px var(--text);color:var(--ink);
+  background:rgba(243,245,250,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:0;border-radius:999px;padding:9px 16px;cursor:pointer;
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 2px 10px rgba(26,33,64,.12);
+}
+#leave:focus-visible, .btn:focus-visible, .link:focus-visible, input:focus-visible{outline:3px solid var(--cobalt);outline-offset:3px}
+
+#count{
+  position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;
+  font-family:var(--display);font-weight:900;color:var(--paper);
+  font-size:min(38vw, 34vh);line-height:1;
+  text-shadow:0 6px 30px rgba(26,33,64,.35);
+}
+#count span{animation:countIn .9s cubic-bezier(.2,.8,.2,1) both}
+@keyframes countIn{0%{transform:scale(1.35);opacity:0}25%{opacity:1}100%{transform:scale(.92);opacity:0}}
+
+#toast{
+  position:fixed;left:50%;bottom:calc(22px + var(--safe-b));transform:translate(-50%, 12px);
+  background:var(--ink);color:var(--paper);font-size:14px;font-weight:500;
+  padding:10px 16px;border-radius:12px;opacity:0;transition:.3s;pointer-events:none;max-width:calc(100vw - 32px)
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- Menu panel ---------- */
+#panel{
+  position:fixed;
+  left:calc(clamp(16px, 4vw, 48px) + var(--safe-l));
+  bottom:calc(clamp(16px, 5vh, 56px) + var(--safe-b));
+  width:min(420px, calc(100vw - 32px));
+  opacity:0;transform:translateY(16px);
+  transition:opacity .45s, transform .45s cubic-bezier(.2,.8,.2,1);
+  pointer-events:none;
+}
+body.menu #panel{opacity:1;transform:none;pointer-events:auto}
+.card{
+  background:rgba(243,245,250,.78);
+  backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);
+  border-radius:22px;
+  padding:22px 22px 20px;
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 18px 50px rgba(26,33,64,.18);
+}
+.screen{display:none}
+.screen.on{display:block;animation:screenIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h1{
+  font-family:var(--display);font-weight:900;
+  font-size:clamp(64px, 11vh, 104px);
+  line-height:.82;letter-spacing:-.005em;margin:0 0 14px;
+}
+h1 .line2{display:block;color:var(--cobalt)}
+h2{font-family:var(--display);font-weight:800;font-size:44px;line-height:.9;margin:0 0 12px}
+p{margin:0 0 18px;font-size:15px;line-height:1.5;color:var(--ink-soft);max-width:36ch}
+p.fine{font-size:13px;margin-top:-6px}
+.actions{display:grid;gap:10px}
+.btn{
+  appearance:none;border:0;cursor:pointer;
+  font:600 16px var(--text);letter-spacing:.005em;
+  border-radius:14px;padding:15px 18px;text-align:left;
+  display:flex;justify-content:space-between;align-items:center;
+  transition:transform .12s, background .2s;
+}
+.btn:active{transform:scale(.985)}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn.primary:hover{background:#232B52}
+.btn.secondary{background:rgba(26,33,64,.07);color:var(--ink)}
+.btn.secondary:hover{background:rgba(26,33,64,.11)}
+.btn .puck{
+  width:14px;height:14px;border-radius:50%;flex:none;
+  background:var(--saffron);box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)
+}
+.btn.secondary .puck{background:var(--cobalt)}
+.btn[disabled]{opacity:.5;cursor:default}
+.link{
+  appearance:none;background:none;border:0;padding:6px 0;margin-top:12px;
+  font:500 14px var(--text);color:var(--ink-soft);cursor:pointer;text-decoration:underline;text-underline-offset:3px
+}
+.btn.level{padding:12px 18px}
+.btn.level b{display:block;font-weight:600;font-size:16px}
+.btn.level small{display:block;font-weight:400;font-size:13px;color:var(--ink-soft);margin-top:2px}
+.btn.level.current{box-shadow:inset 0 0 0 2px var(--cobalt)}
+.pips{display:flex;gap:4px;flex:none}
+.pips i{width:8px;height:8px;border-radius:50%;background:rgba(26,33,64,.16)}
+.pips i.on{background:var(--cobalt)}
+.link + .link{margin-left:18px}
+.join{display:flex;gap:8px;margin-top:14px}
+.join label{display:block;font-size:13px;font-weight:500;color:var(--ink-soft);margin:16px 0 6px}
+input.code{
+  flex:1;min-width:0;
+  font:800 28px var(--display);letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink);background:rgba(255,255,255,.75);
+  border:1.5px solid rgba(26,33,64,.14);border-radius:14px;padding:8px 14px;
+}
+input.code::placeholder{color:rgba(26,33,64,.25);letter-spacing:.18em}
+.join .btn{padding:0 20px}
+.bigcode{
+  font-family:var(--display);font-weight:900;font-size:76px;line-height:.9;
+  letter-spacing:.12em;margin:4px 0 14px;color:var(--ink);
+  display:flex;gap:.08em
+}
+.bigcode span{
+  display:inline-grid;place-items:center;width:1.0em;
+  border-bottom:4px solid var(--cobalt);padding-bottom:.04em;
+}
+.waiting{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;color:var(--ink);margin:0 0 16px}
+.waiting .pulse{width:10px;height:10px;border-radius:50%;background:var(--cobalt);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(.7);opacity:.45}50%{transform:scale(1);opacity:1}}
+.err{color:#B4322A;font-size:14px;font-weight:500;margin:10px 0 0;min-height:1em}
+.result{font-family:var(--display);font-weight:800;font-size:28px;color:var(--ink-soft);margin:-4px 0 18px;font-variant-numeric:tabular-nums}
+
+@media (max-height:560px) and (orientation:landscape){
+  h1{font-size:56px}
+  .card{padding:16px}
+  p{margin-bottom:12px}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body class="menu">
+<canvas id="c" aria-label="Air hockey table"></canvas>
+
+<div id="hud" aria-live="polite">
+  <div class="score" id="score">
+    <div class="row opp" aria-label="Opponent score"><span class="chip"></span><span class="num" id="sOpp">0</span></div>
+    <div class="row me"  aria-label="Your score"><span class="chip"></span><span class="num" id="sMe">0</span></div>
+    <div class="to">First to 7</div>
+  </div>
+  <div class="netinfo" id="netinfo" hidden><span class="dot"></span><span id="ping">–</span></div>
+  <button id="leave" type="button">Leave</button>
+</div>
+<div id="count"></div>
+<div id="toast" role="status"></div>
+
+<div id="panel">
+  <div class="card">
+    <section class="screen on" data-screen="home">
+      <h1>Air<span class="line2">hockey</span></h1>
+      <p>First to seven wins. Play a friend online, or warm up against the computer.</p>
+      <div class="actions">
+        <button class="btn primary" data-go="friend">Play a friend <span class="puck"></span></button>
+        <button class="btn secondary" data-go="practice">Practice against the computer <span class="puck"></span></button>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="practice">
+      <h2>Practice</h2>
+      <p>Choose how good the computer is. You can change it after each game.</p>
+      <div class="actions">
+        <button class="btn secondary level" data-level="easy"><span><b>Easy</b><small>Slow to react, and leaves gaps</small></span><span class="pips" aria-hidden="true"><i class="on"></i><i></i><i></i></span></button>
+        <button class="btn secondary level" data-level="medium"><span><b>Medium</b><small>Quick, but misreads bank shots</small></span><span class="pips" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></span></button>
+        <button class="btn secondary level" data-level="hard"><span><b>Hard</b><small>Fast hands, reads every angle</small></span><span class="pips" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></span></button>
+      </div>
+      <button class="link" data-go="home">Back</button>
+    </section>
+
+    <section class="screen" data-screen="friend">
+      <h2>Play a friend</h2>
+      <p>Start a match and send your friend the code, or enter the code they sent you.</p>
+      <div class="actions">
+        <button class="btn primary" id="host">Start a match <span class="puck"></span></button>
+      </div>
+      <form class="joinform" id="joinform" autocomplete="off">
+        <div class="join">
+          <input class="code" id="codein" maxlength="4" placeholder="CODE" aria-label="Match code" inputmode="text" autocapitalize="characters" spellcheck="false">
+          <button class="btn secondary" type="submit">Join</button>
+        </div>
+        <div class="err" id="joinerr"></div>
+      </form>
+      <button class="link" data-go="home">Back</button>
+    </section>
+
+    <section class="screen" data-screen="hosting">
+      <h2>Your match code</h2>
+      <div class="bigcode" id="bigcode" aria-live="polite"></div>
+      <div class="waiting"><span class="pulse"></span><span id="hoststatus">Getting a code…</span></div>
+      <p class="fine">Your friend opens this same file, chooses Play a friend, and types the code.</p>
+      <div class="actions">
+        <button class="btn secondary" id="copycode">Copy code <span class="puck"></span></button>
+      </div>
+      <button class="link" id="cancelhost">Cancel</button>
+    </section>
+
+    <section class="screen" data-screen="joining">
+      <h2>Joining</h2>
+      <div class="waiting"><span class="pulse"></span><span id="joinstatus">Connecting…</span></div>
+      <button class="link" id="canceljoin">Cancel</button>
+    </section>
+
+    <section class="screen" data-screen="over">
+      <h2 id="overtitle">You win</h2>
+      <div class="result" id="overscore">7–4</div>
+      <div class="waiting" id="rematchwait" hidden><span class="pulse"></span><span>Waiting for your opponent</span></div>
+      <div class="actions">
+        <button class="btn primary" id="again">Play again <span class="puck"></span></button>
+      </div>
+      <button class="link" id="changelevel" hidden>Change difficulty</button>
+      <button class="link" id="tomenu">Back to menu</button>
+    </section>
+
+    <section class="screen" data-screen="left">
+      <h2>Match ended</h2>
+      <p id="lefttext">Your opponent left the match.</p>
+      <div class="actions">
+        <button class="btn primary" data-go="home">Back to menu <span class="puck"></span></button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* =====================================================================
+   1. Table dimensions & physics constants  (metres, seconds)
+   ===================================================================== */
+const HW = 0.5, HL = 1.0;            // half width / half length of the playfield
+const PUCK_R = 0.045, PAD_R = 0.075;     // sized for thumbs: ~44pt mallet on a phone
+const GOAL_HW = 0.2;               // half width of the goal mouth
+const RAIL_T = 0.07, RAIL_H = 0.05, BUMP = 0.007;   // rails sit just outside a rubber bumper strip
+const STEP = 1 / 240;                // fixed physics step
+const MAX_PUCK = 4.6;                // m/s
+const PAD_MAX = 7.5;                 // paddle chase speed, m/s
+const FRICTION = 0.10;               // air cushion, very low
+const WALL_E = 0.9, PAD_E = 0.88;
+const HYST = PUCK_R;                 // handoff hysteresis around the centre line
+const WIN = 7;
+const COL = { you: 0xFFB21E, them: 0xFF6F8E };
+
+const sign = s => (s === 'a' ? 1 : -1);   // side a defends +z, side b defends -z
+const other = s => (s === 'a' ? 'b' : 'a');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* =====================================================================
+   2. Physics — plain 2D circles, deterministic, no engine
+   ===================================================================== */
+function circleHit(p, cx, cz, cr, cvx, cvz, e) {
+  const R = PUCK_R + cr, dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
+  if (d2 >= R * R) return 0;
+  const d = Math.sqrt(d2);
+  const nx = d > 1e-6 ? dx / d : 0, nz = d > 1e-6 ? dz / d : 1;
+  p.x = cx + nx * R; p.z = cz + nz * R;                       // push out
+  const vn = (p.vx - cvx) * nx + (p.vz - cvz) * nz;
+  if (vn < 0) { p.vx -= (1 + e) * vn * nx; p.vz -= (1 + e) * vn * nz; return -vn; }
+  return 0.0001;
+}
+function walls(p) {
+  let hit = 0;
+  const xr = HW - PUCK_R, zr = HL - PUCK_R;
+  if (p.x > xr) { hit = Math.abs(p.vx); p.x = xr; p.vx = -Math.abs(p.vx) * WALL_E; }
+  if (p.x < -xr) { hit = Math.abs(p.vx); p.x = -xr; p.vx = Math.abs(p.vx) * WALL_E; }
+  if (Math.abs(p.x) >= GOAL_HW) {
+    if (p.z > zr && p.z < HL + PUCK_R) { hit = Math.abs(p.vz); p.z = zr; p.vz = -Math.abs(p.vz) * WALL_E; }
+    if (p.z < -zr && p.z > -HL - PUCK_R) { hit = Math.abs(p.vz); p.z = -zr; p.vz = Math.abs(p.vz) * WALL_E; }
+  } else {
+    // goal posts are the two corners of each mouth
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const h = circleHit(p, sx * GOAL_HW, sz * HL, 0.003, 0, 0, WALL_E);
+      if (h > 0.001) hit = Math.max(hit, h);
+    }
+    // inside the slot: keep the puck between the posts
+    if (Math.abs(p.z) > HL) p.x = clamp(p.x, -GOAL_HW + PUCK_R, GOAL_HW - PUCK_R);
+  }
+  return hit;
+}
+/** Advance the puck one step. Returns { hit, wall, goal } where goal is the side that conceded. */
+function stepPuck(p, dt, pads) {
+  p.x += p.vx * dt; p.z += p.vz * dt;
+  const f = Math.exp(-FRICTION * dt); p.vx *= f; p.vz *= f;
+  let hit = 0;
+  for (const q of pads) hit = Math.max(hit, circleHit(p, q.x, q.z, PAD_R, q.vx, q.vz, PAD_E));
+  const wall = walls(p);
+  for (const q of pads) {
+    const dx = p.x - q.x, dz = p.z - q.z, R = PUCK_R + PAD_R, d = Math.hypot(dx, dz);
+    if (d < R - 1e-4) {
+      const nx = d > 1e-6 ? dx / d : 0, nz = d > 1e-6 ? dz / d : 1, pen = R - d;
+      q.x -= nx * pen; q.z -= nz * pen;
+    }
+  }
+  const sp = Math.hypot(p.vx, p.vz);
+  if (sp > MAX_PUCK) { p.vx *= MAX_PUCK / sp; p.vz *= MAX_PUCK / sp; }
+  let goal = null;
+  if (p.z > HL + PUCK_R * 0.8) goal = 'a'; else if (p.z < -HL - PUCK_R * 0.8) goal = 'b';
+  return { hit, wall, goal };
+}
+function padBounds(side) {
+  const x = HW - PAD_R;
+  return side === 'a' ? { x0: -x, x1: x, z0: 0, z1: HL - PAD_R } : { x0: -x, x1: x, z0: -(HL - PAD_R), z1: 0 };
+}
+function movePad(pad, tx, tz, dt, side, maxSpeed = PAD_MAX) {
+  const b = padBounds(side);
+  tx = clamp(tx, b.x0, b.x1); tz = clamp(tz, b.z0, b.z1);
+  let dx = tx - pad.x, dz = tz - pad.z;
+  const d = Math.hypot(dx, dz), m = maxSpeed * dt;
+  if (d > m) { dx *= m / d; dz *= m / d; }
+  pad.x += dx; pad.z += dz;
+  // lightly smoothed velocity, used for hit impulse
+  pad.vx += (dx / dt - pad.vx) * 0.5; pad.vz += (dz / dt - pad.vz) * 0.5;
+}
+function extrapolate(st, secs, pads) {
+  const p = { x: st[0], z: st[1], vx: st[2], vz: st[3] };
+  let t = clamp(secs, 0, 0.25);
+  const ps = pads.map(q => ({ ...q }));      // never move the real mallets while predicting
+  while (t > 1e-6) { const d = Math.min(STEP, t); stepPuck(p, d, ps); t -= d; }
+  return p;
+}
+
+/* =====================================================================
+   3. Game state
+   ===================================================================== */
+const G = {
+  mode: 'attract',          // attract | solo | online
+  me: 'a',
+  phase: 'play',            // waiting | countdown | play | over | left
+  puck: { x: 0, z: 0.4, vx: 0, vz: 0 },
+  pads: { a: { x: 0, z: 0.8, vx: 0, vz: 0 }, b: { x: 0, z: -0.8, vx: 0, vz: 0 } },
+  target: { x: 0, z: 0.8 },
+  owner: 'a', epoch: 0,     // puck authority (online)
+  conceded: { a: 0, b: 0 },
+  match: 1, want: 1,
+  holdUntil: 0,             // puck frozen after a goal / countdown (ms, local clock)
+  countEnd: 0,
+  offset: { x: 0, z: 0 },   // visual error offset for smooth corrections
+  predictedGoal: false,
+};
+const AI = { a: { aim: 0, tx: 0, tz: 0.8, retreat: 0, err: 0 }, b: { aim: 0, tx: 0, tz: -0.8, retreat: 0, err: 0 } };
+/* Computer skill. speed: mallet top speed (m/s). react: how quickly it re-targets (higher = snappier).
+   predict: 0 = just shadows the puck, 1 = reads bank shots perfectly. err: how far off its read can be.
+   aim: spread of its shots. press: puck speed below which it steps up to attack instead of defending. */
+const LEVELS = {
+  easy:   { label: 'Easy',   speed: 1.15, react: 3.5, predict: 0,    err: 0.13, aim: 0.3,  press: 0.7 },
+  medium: { label: 'Medium', speed: 1.7,  react: 7,   predict: 0.65, err: 0.07, aim: 0.18, press: 1.0 },
+  hard:   { label: 'Hard',   speed: 2.4,  react: 14,  predict: 1,    err: 0.02, aim: 0.1,  press: 1.2 },
+};
+const DEMO = { ...LEVELS.hard, speed: 2.6 };                  // the attract-mode exhibition match
+const PILOT = { ...LEVELS.hard, speed: 3.0 };                 // test hook
+let level = 'medium';
+try { const v = localStorage.getItem('ah-level'); if (LEVELS[v]) level = v; } catch { }
+let autopilot = false;      // test hook: local paddle driven by the AI
+
+/* =====================================================================
+   4. Renderer, scene, lighting
+   ===================================================================== */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 0.96;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+
+const camera = new THREE.PerspectiveCamera(36, 1, 0.05, 40);
+
+const key = new THREE.DirectionalLight(0xFFF6EA, 2.6);
+key.position.set(-1.3, 3.2, 1.1);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -1.6; key.shadow.camera.right = 1.6;
+key.shadow.camera.top = 1.8; key.shadow.camera.bottom = -1.8;
+key.shadow.camera.near = 0.5; key.shadow.camera.far = 8;
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.01;
+key.shadow.radius = 4;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xDDE6FF, 0.7);
+rim.position.set(1.6, 1.4, -2.2);
+scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xF2F5FF, 0x8A8F99, 0.35));
+
+/* ---------- procedural textures ---------- */
+function canvasTex(w, h, draw, srgb = true) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+// Playfield: cobalt enamel with crisp ink markings. Air holes are drawn in the shader.
+const fieldTex = canvasTex(1024, 2048, (g, w, h) => {
+  const px = w / (2 * HW);                    // pixels per metre
+  const grad = g.createRadialGradient(w / 2, h / 2, 50, w / 2, h / 2, h * 0.62);
+  grad.addColorStop(0, '#2343C4'); grad.addColorStop(0.7, '#1E3BAE'); grad.addColorStop(1, '#18308F');
+  g.fillStyle = grad; g.fillRect(0, 0, w, h);
+  // enamel grain
+  const img = g.getImageData(0, 0, w, h), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 6; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+  g.putImageData(img, 0, 0);
+  const ink = 'rgba(241,244,255,0.94)';
+  g.strokeStyle = ink; g.fillStyle = ink; g.lineCap = 'round';
+  // centre line
+  g.lineWidth = 0.007 * px; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
+  // centre circle + spot
+  g.lineWidth = 0.005 * px; g.beginPath(); g.arc(w / 2, h / 2, 0.15 * px, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(w / 2, h / 2, 0.012 * px, 0, Math.PI * 2); g.fill();
+  // goal creases
+  g.lineWidth = 0.005 * px;
+  g.beginPath(); g.arc(w / 2, 0, 0.27 * px, 0, Math.PI); g.stroke();
+  g.beginPath(); g.arc(w / 2, h, 0.27 * px, Math.PI, Math.PI * 2); g.stroke();
+  // faint inset border
+  g.strokeStyle = 'rgba(241,244,255,0.28)'; g.lineWidth = 0.003 * px;
+  const ins = 0.022 * px; g.strokeRect(ins, ins, w - 2 * ins, h - 2 * ins);
+  // serve spots
+  g.fillStyle = 'rgba(241,244,255,0.55)';
+  for (const z of [0.45, -0.45]) { g.beginPath(); g.arc(w / 2, h / 2 + z * px, 0.007 * px, 0, Math.PI * 2); g.fill(); }
+});
+// Birch plywood: fine grain plus darker lamination lines
+function birchTex(rotate) {
+  const t = canvasTex(1024, 256, (g, w, h) => {
+    g.fillStyle = '#D9B786'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 260; i++) {
+      const y = Math.random() * h, a = 0.05 + Math.random() * 0.12;
+      g.strokeStyle = `rgba(${120 + Math.random() * 40},${84 + Math.random() * 30},${44},${a})`;
+      g.lineWidth = 0.5 + Math.random() * 1.6;
+      g.beginPath(); g.moveTo(0, y);
+      for (let x = 0; x <= w; x += 32) g.lineTo(x, y + Math.sin(x * 0.01 + i) * 2.2);
+      g.stroke();
+    }
+    // ply laminations
+    for (let k = 1; k < 9; k++) {
+      g.fillStyle = 'rgba(132,92,50,0.22)';
+      g.fillRect(0, (k / 9) * h, w, 1.4);
+    }
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  if (rotate) { t.center.set(0.5, 0.5); t.rotation = Math.PI / 2; }
+  return t;
+}
+
+/* ---------- materials ---------- */
+const fieldU = {
+  uPuck: { value: new THREE.Vector2(0, 0) },
+  uAir: { value: 1 },
+  uWaveO: { value: new THREE.Vector2(0, 1) },
+  uWaveT: { value: -1 },
+  uWaveC: { value: new THREE.Color(COL.you) },
+};
+const fieldMat = new THREE.MeshPhysicalMaterial({
+  map: fieldTex, roughness: 0.3, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.09,
+});
+fieldMat.onBeforeCompile = (sh) => {
+  Object.assign(sh.uniforms, fieldU);
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec2 vXZ;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', `#include <common>
+      varying vec2 vXZ;
+      uniform vec2 uPuck; uniform float uAir;
+      uniform vec2 uWaveO; uniform float uWaveT; uniform vec3 uWaveC;
+      float holeMask(vec2 p){
+        if (abs(p.x) > ${(HW - 0.03).toFixed(3)} || abs(p.y) > ${(HL - 0.03).toFixed(3)}) return 0.0;
+        const float S = 0.045;
+        vec2 f = (fract(p / S + 0.5) - 0.5) * S;
+        float d = length(f);
+        float aa = max(fwidth(d), 1e-5);
+        float m = 1.0 - smoothstep(0.0027 - aa, 0.0027 + aa, d);
+        return m * (1.0 - smoothstep(0.0012, 0.0036, aa));   // fade where holes would alias
+      }`)
+    .replace('#include <map_fragment>', `#include <map_fragment>
+      float hm = holeMask(vXZ);
+      diffuseColor.rgb *= 1.0 - 0.7 * hm;`)
+    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      {
+        float dp = distance(vXZ, uPuck);
+        float air = hm * (1.0 - smoothstep(0.03, 0.17, dp)) * uAir;
+        totalEmissiveRadiance += air * vec3(0.62, 0.76, 1.0) * 0.85;
+        if (uWaveT >= 0.0 && uWaveT < 1.5) {
+          float dw = distance(vXZ, uWaveO);
+          float r = uWaveT * 1.9;
+          float ring = exp(-pow((dw - r) / 0.12, 2.0)) * (1.0 - uWaveT / 1.5);
+          totalEmissiveRadiance += uWaveC * ring * (hm * 5.5 + 0.035);
+        }
+      }`);
+};
+const birchEnd = new THREE.MeshPhysicalMaterial({ map: birchTex(false), roughness: 0.52, clearcoat: 0.3, clearcoatRoughness: 0.4 });
+const birchSide = new THREE.MeshPhysicalMaterial({ map: birchTex(true), roughness: 0.52, clearcoat: 0.3, clearcoatRoughness: 0.4 });
+const rubberMat = new THREE.MeshStandardMaterial({ color: 0x24272F, roughness: 0.85 });
+const slotMat = new THREE.MeshStandardMaterial({ color: 0x0A0C12, roughness: 1 });
+const cabinetMat = new THREE.MeshPhysicalMaterial({ color: 0xCDD1D8, roughness: 0.55, clearcoat: 0.2 });
+const feetMat = new THREE.MeshStandardMaterial({ color: 0x2A3050, roughness: 0.6, metalness: 0.2 });
+
+/* =====================================================================
+   5. The table
+   ===================================================================== */
+const table = new THREE.Group();
+scene.add(table);
+const add = (mesh, shadow = true) => { mesh.castShadow = shadow; mesh.receiveShadow = true; table.add(mesh); return mesh; };
+
+// cabinet
+const cabW = 2 * (HW + BUMP + RAIL_T) + 0.012, cabL = 2 * (HL + BUMP + RAIL_T) + 0.012, cabH = 0.13;
+const cab = add(new THREE.Mesh(new RoundedBoxGeometry(cabW, cabH, cabL, 4, 0.022), cabinetMat));
+cab.position.y = -cabH / 2 - 0.002;
+// cobalt plinth line around the cabinet
+const plinth = add(new THREE.Mesh(new RoundedBoxGeometry(cabW - 0.04, 0.03, cabL - 0.04, 3, 0.012), feetMat));
+plinth.position.y = -cabH - 0.017;
+
+// playfield
+const field = add(new THREE.Mesh(new THREE.PlaneGeometry(2 * HW, 2 * HL), fieldMat), false);
+field.rotation.x = -Math.PI / 2;
+
+// side rails (run the full length, cover the corners)
+for (const sx of [-1, 1]) {
+  const r = add(new THREE.Mesh(new RoundedBoxGeometry(RAIL_T, RAIL_H, 2 * (HL + BUMP + RAIL_T), 4, 0.012), birchSide));
+  r.position.set(sx * (HW + BUMP + RAIL_T / 2), RAIL_H / 2, 0);
+  const bump = add(new THREE.Mesh(new THREE.BoxGeometry(BUMP, 0.022, 2 * (HL + BUMP)), rubberMat), false);
+  bump.position.set(sx * (HW + BUMP / 2), 0.015, 0);
+}
+// end rails, split by the goal mouth, bridged above the slot
+const goalLights = {};
+for (const sz of [-1, 1]) {
+  const w = HW + BUMP - GOAL_HW, zc = sz * (HL + BUMP + RAIL_T / 2);
+  for (const sx of [-1, 1]) {
+    const r = add(new THREE.Mesh(new RoundedBoxGeometry(w, RAIL_H, RAIL_T, 4, 0.012), birchEnd));
+    r.position.set(sx * (GOAL_HW + w / 2), RAIL_H / 2, zc);
+    const bump = add(new THREE.Mesh(new THREE.BoxGeometry(HW - GOAL_HW, 0.022, BUMP), rubberMat), false);
+    bump.position.set(sx * (GOAL_HW + (HW - GOAL_HW) / 2), 0.015, sz * (HL + BUMP / 2));
+  }
+  const bridgeH = RAIL_H - 0.027;
+  const bridge = add(new THREE.Mesh(new RoundedBoxGeometry(2 * GOAL_HW + 0.02, bridgeH, RAIL_T, 3, 0.008), birchEnd));
+  bridge.position.set(0, 0.027 + bridgeH / 2, zc);
+  const slot = add(new THREE.Mesh(new THREE.BoxGeometry(2 * GOAL_HW, 0.04, RAIL_T + BUMP - 0.004), slotMat), false);
+  slot.position.set(0, 0.006, sz * (HL + (RAIL_T + BUMP) / 2));
+  // goal light: a thin inlay along the top of the bridge
+  const lm = new THREE.MeshStandardMaterial({ color: 0x343A52, roughness: 0.4, emissive: 0x000000 });
+  const light = add(new THREE.Mesh(new THREE.BoxGeometry(2 * GOAL_HW - 0.03, 0.0025, 0.012), lm), false);
+  light.position.set(0, RAIL_H + 0.0008, zc);
+  goalLights[sz > 0 ? 'a' : 'b'] = { mat: lm, t: 0, color: new THREE.Color() };
+}
+
+// floor: shadow catcher only, the studio colour comes from CSS
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.ShadowMaterial({ opacity: 0.2 }));
+floor.rotation.x = -Math.PI / 2; floor.position.y = -cabH - 0.034; floor.receiveShadow = true;
+scene.add(floor);
+
+/* ---------- puck & mallets (lathed profiles) ---------- */
+const V = (x, y) => new THREE.Vector2(x, y);
+const PR0 = 0.034, MR0 = 0.056;   // reference radii the profiles are drawn at
+const puckGeo = new THREE.LatheGeometry([
+  V(0, 0), V(PR0 - 0.003, 0), V(PR0, 0.003), V(PR0, 0.009), V(PR0 - 0.0025, 0.012),
+  V(PR0 * 0.74, 0.012), V(PR0 * 0.71, 0.0108), V(PR0 * 0.64, 0.0108), V(PR0 * 0.61, 0.012), V(0, 0.012),
+], 64);
+const puckMat = new THREE.MeshPhysicalMaterial({ color: 0x15161B, roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.3 });
+const puckMesh = new THREE.Mesh(puckGeo, puckMat);
+puckMesh.castShadow = true;
+puckMesh.scale.set(PUCK_R / PR0, 1.15, PUCK_R / PR0);
+scene.add(puckMesh);
+
+const malletGeo = new THREE.LatheGeometry([
+  V(0, 0.001), V(MR0 - 0.003, 0.001), V(MR0, 0.004), V(MR0, 0.013), V(MR0 - 0.004, 0.018),
+  V(MR0 * 0.74, 0.021), V(0.03, 0.026), V(0.019, 0.034), V(0.0165, 0.046), V(0.0185, 0.052), V(0, 0.052),
+], 72);
+const knobGeo = new THREE.SphereGeometry(0.0225, 40, 24);
+function makeMallet(color) {
+  const mat = new THREE.MeshPhysicalMaterial({ color, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.08, sheen: 0.3, sheenColor: new THREE.Color(0xffffff) });
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(malletGeo, mat); body.castShadow = true; g.add(body);
+  const knob = new THREE.Mesh(knobGeo, mat); knob.position.y = 0.064; knob.castShadow = true; g.add(knob);
+  g.scale.set(PAD_R / MR0, 1.12, PAD_R / MR0);
+  scene.add(g);
+  return { g, mat };
+}
+const mallets = { a: makeMallet(COL.you), b: makeMallet(COL.them) };
+function paintMallets() {
+  const youSide = G.mode === 'attract' ? 'a' : G.me;
+  mallets[youSide].mat.color.setHex(COL.you);
+  mallets[other(youSide)].mat.color.setHex(COL.them);
+}
+
+// speed trail: a soft streak behind a fast puck
+const trailTex = canvasTex(256, 32, (g, w, h) => {
+  const gr = g.createLinearGradient(0, 0, w, 0);
+  gr.addColorStop(0, 'rgba(220,230,255,0)'); gr.addColorStop(0.75, 'rgba(230,238,255,0.55)'); gr.addColorStop(1, 'rgba(240,244,255,0.8)');
+  g.fillStyle = gr; g.beginPath();
+  g.moveTo(0, h / 2); g.quadraticCurveTo(w * 0.7, 3, w - h / 2, 3);
+  g.arc(w - h / 2, h / 2, h / 2 - 3, -Math.PI / 2, Math.PI / 2); g.quadraticCurveTo(w * 0.7, h - 3, 0, h / 2); g.fill();
+});
+const trail = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: trailTex, transparent: true, depthWrite: false, opacity: 0 }));
+scene.add(trail);
+
+/* =====================================================================
+   6. Camera: spherical rig, eased between attract orbit and play view
+   ===================================================================== */
+const cam = { theta: 0.6, elev: 0.62, dist: 3.4, look: 0, sx: 0, sy: 0, fov: 34 };
+const camT = { theta: 0, elev: 1, dist: 3, look: 0, sx: 0, sy: 0, fov: 34 };
+/** Shift the table's centre on screen (fractions of the viewport) without changing perspective. */
+function applyShift(cm, sx, sy) {
+  const w = innerWidth, h = innerHeight;
+  if (Math.abs(sx) < 1e-4 && Math.abs(sy) < 1e-4) { cm.aspect = w / h; cm.clearViewOffset(); return; }
+  const fw = w * (1 + 2 * Math.abs(sx)), fh = h * (1 + 2 * Math.abs(sy));
+  cm.aspect = fw / fh;                         // the virtual full frame's aspect, or the image stretches
+  cm.setViewOffset(fw, fh, sx > 0 ? 0 : fw - w, sy > 0 ? fh - h : 0, w, h);
+}
+let shake = 0;
+function placeCamera(c, cm = camera) {
+  const ce = Math.cos(c.elev);
+  cm.position.set(Math.sin(c.theta) * ce * c.dist, Math.sin(c.elev) * c.dist, Math.cos(c.theta) * ce * c.dist);
+  cm.lookAt(0, 0, c.look);
+}
+const probe = new THREE.PerspectiveCamera();
+const corners = [];
+for (const x of [-HW - BUMP - RAIL_T, HW + BUMP + RAIL_T]) for (const z of [-HL - BUMP - RAIL_T, HL + BUMP + RAIL_T]) for (const y of [0, RAIL_H + 0.06]) corners.push(new THREE.Vector3(x, y, z));
+// Find the closest distance where the whole table fits, leaving room for the HUD.
+function fitDist(theta, elev, look, box) {
+  probe.fov = camT.fov; probe.aspect = innerWidth / innerHeight; probe.near = camera.near; probe.far = camera.far;
+  applyShift(probe, camT.sx, camT.sy); probe.updateProjectionMatrix();
+  let lo = 1, hi = 24;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    placeCamera({ theta, elev, dist: mid, look }, probe);
+    probe.updateMatrixWorld();
+    let ok = true;
+    for (const c of corners) {
+      const v = c.clone().project(probe);
+      if (v.x < box.x0 || v.x > box.x1 || v.y < box.y0 || v.y > box.y1) { ok = false; break; }
+    }
+    if (ok) hi = mid; else lo = mid;
+  }
+  return hi;
+}
+function setPlayCamera() {
+  const portrait = camera.aspect < 1;
+  camT.theta = G.me === 'a' ? 0 : Math.PI;
+  camT.elev = portrait ? 1.12 : 0.92;
+  camT.fov = portrait ? 26 : 28;   // a longer lens keeps the near end from splaying
+  camT.look = -sign(G.me) * 0.06;
+  camT.sx = camT.sy = 0;
+  camT.dist = fitDist(camT.theta, camT.elev, camT.look, { x0: -0.93, x1: 0.93, y0: -0.93, y1: portrait ? 0.74 : 0.86 });
+}
+function setAttractCamera() {
+  // frame the table in the space the menu card leaves free
+  const w = innerWidth, h = innerHeight, side = w >= 760;
+  const pr = document.getElementById('panel').getBoundingClientRect();
+  let box;
+  if (side) {
+    const x0 = (pr.right + 24) / w * 2 - 1;
+    camT.sx = (x0 + 1) / 4; camT.sy = 0;
+    box = { x0: x0, x1: 0.97, y0: -0.97, y1: 0.97 };
+    camT.elev = 0.56; camT.fov = 32;
+  } else {
+    const y0 = 1 - (pr.top - 12) / h * 2;
+    camT.sx = 0; camT.sy = (y0 + 1) / 4;
+    box = { x0: -0.96, x1: 0.96, y0: y0, y1: 0.94 };
+    camT.elev = 0.72; camT.fov = 34;
+  }
+  camT.look = 0;
+  // the table orbits, so fit the worst angle; a little overscan on wide screens is deliberate
+  let d = 0;
+  for (let i = 0; i < 12; i++) d = Math.max(d, fitDist(i * Math.PI / 12, camT.elev, 0, box));
+  camT.dist = d * (side ? 0.9 : 0.98);
+}
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  if (G.mode === 'attract') setAttractCamera(); else setPlayCamera();
+}
+addEventListener('resize', resize);
+
+/* =====================================================================
+   7. Input: pointer → table plane, with a touch offset so the finger
+      never hides the mallet
+   ===================================================================== */
+const ray = new THREE.Raycaster();
+const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02);
+const hitPt = new THREE.Vector3();
+function pointerToTable(e) {
+  const r = canvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.ray.intersectPlane(plane, hitPt)) return;
+  const touchLead = e.pointerType === 'touch' ? 0.095 : 0;
+  G.target.x = hitPt.x;
+  G.target.z = hitPt.z - sign(G.me) * touchLead;
+}
+canvas.addEventListener('pointermove', e => { if (G.mode !== 'attract') pointerToTable(e); });
+canvas.addEventListener('pointerdown', e => {
+  if (G.mode === 'attract') return;
+  canvas.setPointerCapture(e.pointerId); pointerToTable(e); ensureAudio();
+});
+
+/* =====================================================================
+   8. Sound: tiny synthesised clacks (no assets)
+   ===================================================================== */
+let actx = null, lastClack = 0;
+function ensureAudio() {
+  try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch { }
+}
+function clack(strength, kind) {
+  if (!actx || G.mode === 'attract') return;
+  const now = actx.currentTime;
+  if (now - lastClack < 0.035) return;
+  lastClack = now;
+  const amp = clamp(strength / 3.5, 0.08, 1) * (kind === 'wall' ? 0.35 : 0.6);
+  const len = 0.05, buf = actx.createBuffer(1, actx.sampleRate * len, actx.sampleRate), ch = buf.getChannelData(0);
+  for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / ch.length, 4);
+  const src = actx.createBufferSource(); src.buffer = buf;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = kind === 'wall' ? 1500 : 2300 + strength * 250; bp.Q.value = kind === 'wall' ? 3 : 7;
+  const gn = actx.createGain(); gn.gain.value = amp;
+  src.connect(bp).connect(gn).connect(actx.destination); src.start(now);
+  if (kind === 'pad') {
+    const o = actx.createOscillator(), og = actx.createGain();
+    o.frequency.setValueAtTime(190, now); o.frequency.exponentialRampToValueAtTime(90, now + 0.08);
+    og.gain.setValueAtTime(amp * 0.5, now); og.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+    o.connect(og).connect(actx.destination); o.start(now); o.stop(now + 0.12);
+    try { navigator.vibrate?.(8); } catch { }
+  }
+}
+function chime(up) {
+  if (!actx) return;
+  const now = actx.currentTime;
+  (up ? [660, 880, 1320] : [440, 330]).forEach((f, i) => {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, now + i * 0.09);
+    g.gain.exponentialRampToValueAtTime(0.16, now + i * 0.09 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.09 + 0.45);
+    o.connect(g).connect(actx.destination); o.start(now + i * 0.09); o.stop(now + i * 0.09 + 0.5);
+  });
+}
+
+/* =====================================================================
+   9. Computer opponent (also drives the attract-mode demo)
+   ===================================================================== */
+function foldX(x) { const r = HW - PUCK_R, span = 4 * r; let u = ((x + r) % span + span) % span; return u <= 2 * r ? u - r : 3 * r - u; }
+function aiMove(side, dt, L) {
+  const pad = G.pads[side], s = sign(side), p = G.puck, st = AI[side], speed = L.speed;
+  const inHalf = s * p.z > 0.02;
+  const coming = s * p.vz > 0.15;
+  let tx, tz;
+  const contact = Math.hypot(pad.x - p.x, pad.z - p.z) < PAD_R + PUCK_R + 0.0015;   // only after a real touch
+  if (contact && st.retreat <= 0) st.retreat = 0.28;          // hit, then pull back like a person would
+  if (st.retreat > 0) {
+    st.retreat -= dt;
+    let rx = pad.x - p.x, rz = pad.z - p.z; const rl = Math.hypot(rx, rz) || 1;
+    tx = pad.x + (rx / rl) * 0.2; tz = pad.z + (rz / rl) * 0.2;
+    if (s * tz > HL - PAD_R - 0.01) tz = s * (HL * 0.6);       // never retreat into our own end rail
+    st.tx = tx; st.tz = tz;
+    movePad(pad, tx, tz, dt, side, speed);
+    return;
+  }
+  if (inHalf && !(coming && Math.abs(p.vz) > L.press)) {
+    // attack: line up behind the puck toward the far goal, then drive through it
+    const gx = st.aim, gz = -s * HL;
+    let dx = gx - p.x, dz = gz - p.z; let dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+    const bnd = padBounds(side), reach = PAD_R + PUCK_R + 0.05;
+    const bx = p.x - dx * reach, bz = p.z - dz * reach;
+    if (bx < bnd.x0 - 0.01 || bx > bnd.x1 + 0.01 || bz < bnd.z0 - 0.01 || bz > bnd.z1 + 0.01) {
+      // puck is jammed against a rail or in a corner: strike from the open side so it caroms out
+      dx = p.x - pad.x * 0.3; dz = p.z - s * HL * 0.45; dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+    }
+    const behind = (pad.x - p.x) * dx + (pad.z - p.z) * dz;
+    if (behind < -(PAD_R + PUCK_R) * 0.6) { tx = p.x + dx * 0.1; tz = p.z + dz * 0.1; }
+    else {
+      // get behind it: circle around the puck rather than barging through it
+      const R = PAD_R + PUCK_R + 0.05;
+      const want = Math.atan2(-dz, -dx), at = Math.atan2(pad.z - p.z, pad.x - p.x);
+      let da = Math.atan2(Math.sin(want - at), Math.cos(want - at));
+      if (Math.abs(da) > 0.35 && Math.hypot(pad.x - p.x, pad.z - p.z) < R + 0.12) {
+        const ang = at + clamp(da, -0.7, 0.7);
+        tx = p.x + Math.cos(ang) * R; tz = p.z + Math.sin(ang) * R;
+        st.tx = tx; st.tz = tz;                                     // no lag while orbiting
+      } else { tx = p.x - dx * R; tz = p.z - dz * R; }
+    }
+  } else {
+    // defend: sit in front of goal on the predicted line
+    const homeZ = s * (HL - 0.2);
+    let px = p.x * 0.6;
+    if (coming) {
+      if (!st.wasComing) {                                     // a new shot: decide once how well we read it
+        st.err = (Math.random() - 0.5) * 2 * L.err;
+        st.aim = (Math.random() - 0.5) * 2 * L.aim;
+      }
+      const t = (homeZ - p.z) / p.vz;
+      if (t > 0 && t < 2) px = px + (foldX(p.x + p.vx * t) - px) * L.predict;
+    }
+    tx = clamp(px + (coming ? st.err : 0), -0.3, 0.3); tz = homeZ;
+  }
+  st.wasComing = coming;
+  // reaction lag
+  const k = 1 - Math.exp(-dt * L.react);
+  st.tx += (tx - st.tx) * k; st.tz += (tz - st.tz) * k;
+  // settle instead of twitching once we're essentially there
+  if (Math.hypot(st.tx - pad.x, st.tz - pad.z) < 0.004) { pad.vx *= 0.5; pad.vz *= 0.5; return; }
+  movePad(pad, st.tx, st.tz, dt, side, speed);
+}
+
+/* =====================================================================
+   10. Netcode — puck authority handoff
+   ---------------------------------------------------------------------
+   • Each player is authoritative for their own mallet (zero input lag).
+   • The puck is simulated authoritatively by whoever's half it is in.
+     When it crosses the centre line (plus hysteresis) the owner hands
+     it over: epoch += 1, owner = other. Only the owner ever initiates.
+   • The non-owner predicts the puck (dead reckoning incl. wall bounces)
+     and blends toward each authoritative update, extrapolated by the
+     measured one-way latency.
+   • If the receiver's mallet strikes its prediction before the handoff
+     arrives, that "provisional" hit is kept when the handoff lands.
+   • Goals are called only by the defender (who owns the puck when it
+     goes in), so there are never phantom goals.
+   • Every packet is absolute state, so lost or reordered packets just
+     get superseded — the channel can be unreliable/unordered.
+   ===================================================================== */
+const Net = {
+  link: null, code: '', role: null,
+  lastRemoteT: 0, lastRemoteRecv: 0,
+  rtt: 0.08, offsetMin: Infinity, offsetSamples: [],
+  pad: [],                  // remote paddle samples [{t (remote ms), x, z, vx, vz}]
+  provisional: null,        // { epoch, at }
+  remoteM: 0, remoteWant: 0, remoteCon: 0, remotePresent: false,
+  lastSend: 0,
+};
+const oneWay = () => Net.rtt / 2;
+
+function resetNet() {
+  Object.assign(Net, { lastRemoteT: 0, lastRemoteRecv: 0, rtt: 0.08, offsetMin: Infinity, offsetSamples: [], pad: [],
+    provisional: null, remoteM: 0, remoteWant: 0, remoteCon: 0, remotePresent: false });
+}
+function sendState(now) {
+  if (!Net.link || now - Net.lastSend < 15) return;      // ~60 Hz
+  Net.lastSend = now;
+  const p = G.pads[G.me], q = G.puck, r = (v, n = 4) => +v.toFixed(n);
+  Net.link.send({
+    v: 1, t: Math.round(now * 10) / 10,
+    ack: Net.lastRemoteT, age: Net.lastRemoteRecv ? Math.round(now - Net.lastRemoteRecv) : 0,
+    pad: [r(p.x), r(p.z), r(p.vx, 3), r(p.vz, 3)],
+    ep: G.epoch, own: G.owner, puck: [r(q.x), r(q.z), r(q.vx, 3), r(q.vz, 3)],
+    hold: G.holdUntil > now ? Math.round(G.holdUntil - now) : 0,
+    con: G.conceded[G.me], m: G.match, want: G.want, ph: G.phase,
+  });
+}
+function onPacket(m) {
+  const now = performance.now();
+  if (!m || m.v !== 1) return;
+  if (m.bye) { opponentLeft(); return; }
+  if (m.t <= Net.lastRemoteT) return;                    // stale / reordered
+  Net.lastRemoteT = m.t; Net.lastRemoteRecv = now;
+  Net.remotePresent = true;
+
+  // latency: rtt = now − (my t they echoed) − (how long they held it)
+  if (m.ack) { const s = (now - m.ack - m.age) / 1000; if (s > 0 && s < 2) Net.rtt += (s - Net.rtt) * 0.1; }
+  // clock offset (min over a sliding window ≈ smallest transit), for paddle interpolation
+  const off = now - m.t;
+  Net.offsetSamples.push([now, off]);
+  while (Net.offsetSamples.length && now - Net.offsetSamples[0][0] > 3000) Net.offsetSamples.shift();
+  Net.offsetMin = Math.min(...Net.offsetSamples.map(s => s[1]));
+
+  Net.pad.push({ t: m.t, x: m.pad[0], z: m.pad[1], vx: m.pad[2], vz: m.pad[3] });
+  if (Net.pad.length > 40) Net.pad.shift();
+
+  Net.remoteM = m.m; Net.remoteWant = m.want;
+  if (G.mode !== 'online') return;
+
+  // a rematch both sides asked for
+  if (G.phase === 'over' && m.want === G.want && G.want === G.match + 1) { startMatch(G.match + 1); return; }
+  if (m.m !== G.match) return;
+
+  // score: their conceded = my goals
+  const opp = other(G.me);
+  if (m.con > G.conceded[opp]) { G.conceded[opp] = m.con; onGoal(opp); }
+
+  if (G.phase === 'waiting') beginCountdown();
+
+  // --- puck authority ---
+  if (m.ep > G.epoch) {
+    G.epoch = m.ep; G.owner = m.own;
+    const keep = Net.provisional && Net.provisional.epoch === m.ep - 1 && m.own === G.me;
+    Net.provisional = null;
+    if (!keep) {
+      const ex = extrapolate(m.puck, m.hold > 0 ? 0 : oneWay(), [G.pads[opp]]);
+      snapOrBlend(ex, m.own !== G.me || m.hold > 0);
+    }
+    if (m.hold > 0) G.holdUntil = now + Math.max(0, m.hold - oneWay() * 1000);
+    G.predictedGoal = false;
+  } else if (m.ep === G.epoch && m.own === opp && G.owner === opp) {
+    // routine authoritative update from the owner
+    if (Net.provisional && now - Net.provisional.at < Net.rtt * 1000 + 160) return;   // a handoff is on its way
+    Net.provisional = null;
+    // after a predicted goal, wait briefly for the defender to call it; if they don't, they saved it
+    if (G.predictedGoal && now - G.predictedGoal < Net.rtt * 1000 + 160) return;
+    G.predictedGoal = false;
+    const ex = extrapolate(m.puck, m.hold > 0 ? 0 : oneWay(), [G.pads[opp]]);
+    snapOrBlend(ex, false);
+    if (m.hold > 0) G.holdUntil = now + Math.max(0, m.hold - oneWay() * 1000);
+  }
+}
+function snapOrBlend(t, snap) {
+  const ex = t.x - G.puck.x, ez = t.z - G.puck.z;
+  if (snap || Math.hypot(ex, ez) > 0.3) { G.offset.x = 0; G.offset.z = 0; }
+  else { G.offset.x -= ex; G.offset.z -= ez; }
+  Object.assign(G.puck, t);
+}
+function remotePad(now) {
+  const b = Net.pad;
+  if (!b.length) return null;
+  // sample the remote paddle ~45 ms in the past (remote clock), then lead it a little
+  const rt = now - Net.offsetMin - 45;
+  let s;
+  if (rt <= b[0].t) s = b[0];
+  else if (rt >= b[b.length - 1].t) {
+    const l = b[b.length - 1], dt = Math.min((rt - l.t) / 1000, 0.08);
+    s = { x: l.x + l.vx * dt, z: l.z + l.vz * dt, vx: l.vx, vz: l.vz };
+  } else {
+    let i = b.length - 2; while (i > 0 && b[i].t > rt) i--;
+    const p0 = b[i], p1 = b[i + 1], k = (rt - p0.t) / Math.max(1, p1.t - p0.t);
+    s = { x: p0.x + (p1.x - p0.x) * k, z: p0.z + (p1.z - p0.z) * k, vx: p0.vx + (p1.vx - p0.vx) * k, vz: p0.vz + (p1.vz - p0.vz) * k };
+  }
+  const lead = Math.min(oneWay() + 0.045, 0.1) * 0.6;
+  const opp = other(G.me), bd = padBounds(opp);
+  return { x: clamp(s.x + s.vx * lead, bd.x0, bd.x1), z: clamp(s.z + s.vz * lead, bd.z0, bd.z1), vx: s.vx, vz: s.vz };
+}
+
+/* =====================================================================
+   11. Transports — swappable. Anything with send / onmessage / onclose.
+   ===================================================================== */
+const PEER_PREFIX = 'tableair-hockey-v1-';
+function loadPeerJS() {
+  if (window.Peer) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload = res; s.onerror = () => rej(new Error('load'));
+    document.head.appendChild(s);
+  });
+}
+/** WebRTC data channel via PeerJS (its free public broker does the handshake only). */
+async function peerTransport(code, role, status) {
+  if (window.__AH_TEST_TRANSPORT) return window.__AH_TEST_TRANSPORT(code, role, status);
+  await loadPeerJS();
+  return new Promise((resolve, reject) => {
+    const peer = role === 'host' ? new window.Peer(PEER_PREFIX + code) : new window.Peer();
+    const link = { send() { }, onmessage: null, onclose: null, close() { try { peer.destroy(); } catch { } } };
+    let conn = null, done = false;
+    const wire = c => {
+      conn = c;
+      c.on('open', () => {
+        link.send = obj => { try { c.open && c.send(obj); } catch { } };
+        if (!done) { done = true; resolve(link); }
+      });
+      c.on('data', d => link.onmessage && link.onmessage(d));
+      c.on('close', () => link.onclose && link.onclose());
+      c.on('error', () => link.onclose && link.onclose());
+    };
+    peer.on('open', () => {
+      if (role === 'host') status('ready');
+      else { status('connecting'); wire(peer.connect(PEER_PREFIX + code, { reliable: false, serialization: 'json' })); }
+    });
+    peer.on('connection', c => { if (conn) { c.close(); return; } wire(c); });
+    peer.on('error', err => {
+      if (done) return;              // broker hiccups don't affect a live peer-to-peer link
+      peer.destroy(); reject(err);
+    });
+    peer.on('disconnected', () => { if (done) { try { peer.reconnect(); } catch { } } });
+    link._cancel = () => { if (!done) { done = true; peer.destroy(); reject(new Error('cancelled')); } };
+    Net._pending = link;
+  });
+}
+
+/* =====================================================================
+   12. Match flow
+   ===================================================================== */
+function servePuck(side) {
+  Object.assign(G.puck, { x: 0, z: sign(side) * HL * 0.45, vx: 0, vz: 0 });
+  G.offset.x = G.offset.z = 0;
+}
+function startMatch(n) {
+  G.match = n; G.want = n;
+  G.conceded.a = 0; G.conceded.b = 0;
+  G.pads.a = { x: 0, z: HL * 0.8, vx: 0, vz: 0 };
+  G.pads.b = { x: 0, z: -HL * 0.8, vx: 0, vz: 0 };
+  G.target = { x: 0, z: sign(G.me) * HL * 0.8 };
+  const server = n % 2 === 1 ? 'a' : 'b';
+  G.owner = server; G.epoch = n * 1000;
+  servePuck(server);
+  G.predictedGoal = false; Net.provisional = null;
+  updateScore(true);
+  if (G.mode === 'online' && !Net.remotePresent) { G.phase = 'waiting'; return; }
+  beginCountdown();
+}
+function beginCountdown() {
+  G.phase = 'countdown';
+  G.countEnd = performance.now() + 2400;
+  G.holdUntil = G.countEnd;
+  setUI('playing');
+}
+function onGoal(defender) {
+  const scorer = other(defender);
+  const now = performance.now();
+  fieldU.uWaveO.value.set(0, sign(defender) * HL);
+  fieldU.uWaveC.value.setHex(mallets[scorer].mat.color.getHex());
+  fieldU.uWaveT.value = 0;
+  const gl = goalLights[defender]; gl.t = 1; gl.color.copy(mallets[scorer].mat.color);
+  if (!reduceMotion && G.mode !== 'attract') shake = 1;
+  if (G.mode !== 'attract') chime(scorer === G.me);
+  updateScore();
+  G.predictedGoal = false;
+  const winner = G.conceded.a >= WIN ? 'b' : G.conceded.b >= WIN ? 'a' : null;
+  if (winner && G.mode !== 'attract') setTimeout(() => endMatch(winner), 900);
+  if (winner && G.mode === 'attract') { G.conceded.a = G.conceded.b = 0; }
+}
+/** Called by the puck's authority when it goes in. */
+function concede(defender) {
+  G.conceded[defender]++;
+  G.epoch++;                        // force everyone to snap to the new serve
+  G.owner = defender;
+  servePuck(defender);              // the side that was scored on gets the puck
+  G.holdUntil = performance.now() + 1100;
+  onGoal(defender);
+}
+function endMatch(winner) {
+  if (G.phase === 'over' || G.mode === 'attract') return;
+  G.phase = 'over';
+  const you = G.me, mine = G.conceded[other(you)], theirs = G.conceded[you];
+  document.getElementById('overtitle').textContent = winner === you ? 'You win' : 'You lose';
+  document.getElementById('overscore').textContent = `${mine}–${theirs}`;
+  document.getElementById('rematchwait').hidden = true;
+  document.getElementById('again').disabled = false;
+  document.getElementById('changelevel').hidden = G.mode !== 'solo';
+  showScreen('over'); setUI('menu-over');
+}
+function opponentLeft() {
+  if (G.mode !== 'online' || G.phase === 'left') return;
+  G.phase = 'left';
+  Net.link?.close(); Net.link = null;
+  showScreen('left'); setUI('menu-over');
+}
+function toAttract() {
+  try { Net.link?.send({ v: 1, bye: 1 }); } catch { }
+  Net.link?.close(); Net.link = null;
+  Net._pending?._cancel?.();
+  G.mode = 'attract'; G.me = 'a'; G.phase = 'play';
+  G.conceded.a = G.conceded.b = 0; G.holdUntil = 0;
+  servePuck('a');
+  paintMallets(); updateScore(true);
+  cam.theta = cam.theta % (Math.PI * 2);
+  setAttractCamera();
+  setUI('menu');
+  document.getElementById('netinfo').hidden = true;
+}
+function startSolo() {
+  ensureAudio();
+  document.querySelector('.score .to').textContent = `First to 7, ${LEVELS[level].label.toLowerCase()} computer`;
+  resetNet();
+  G.mode = 'solo'; G.me = 'a';
+  paintMallets(); setPlayCamera();
+  startMatch(1);
+}
+async function startOnline(code, role) {
+  ensureAudio();
+  resetNet();
+  Net.code = code; Net.role = role;
+  const statusEl = document.getElementById(role === 'host' ? 'hoststatus' : 'joinstatus');
+  const status = s => {
+    if (s === 'ready') statusEl.textContent = 'Waiting for your friend to join';
+    if (s === 'connecting') statusEl.textContent = 'Connecting to your friend…';
+  };
+  let link;
+  try { link = await peerTransport(code, role, status); }
+  catch (err) {
+    if (err?.message === 'cancelled') return;
+    const t = err?.type;
+    if (role === 'host' && t === 'unavailable-id') { hostMatch(); return; }       // code collision: pick another
+    showScreen('friend');
+    document.getElementById('joinerr').textContent =
+      t === 'peer-unavailable' ? `No match is waiting with code ${code}. Check the code and try again.` :
+      t === 'browser-incompatible' ? 'This browser can’t make peer-to-peer connections.' :
+      err?.message === 'load' ? 'Couldn’t reach the matchmaking service. Check your connection.' :
+      'Couldn’t connect. Try again in a moment.';
+    return;
+  }
+  Net.link = link;
+  link.onmessage = onPacket;
+  link.onclose = opponentLeft;
+  G.mode = 'online'; G.me = role === 'host' ? 'a' : 'b';
+  document.querySelector('.score .to').textContent = 'First to 7';
+  paintMallets(); setPlayCamera();
+  document.getElementById('netinfo').hidden = false;
+  startMatch(1);
+  // say hello right away so the other side starts its countdown
+  sendState(performance.now() + 100);
+}
+
+/* =====================================================================
+   13. Simulation step
+   ===================================================================== */
+let simEvents = { hit: 0, wall: 0 };
+function simStep(dt, now) {
+  const me = G.me, opp = other(me);
+  if (G.mode === 'attract') { aiMove('a', dt, DEMO); aiMove('b', dt, DEMO); }
+  else {
+    if (autopilot) aiMove(me, dt, autopilot === true ? PILOT : autopilot); else movePad(G.pads[me], G.target.x, G.target.z, dt, me);
+    if (G.mode === 'solo') aiMove('b', dt, LEVELS[level]);
+  }
+  if (G.mode === 'online') {
+    const rp = remotePad(now);
+    if (rp) {
+      const q = G.pads[opp];
+      q.vx = (rp.x - q.x) / dt * 0.2 + rp.vx * 0.8; q.vz = (rp.z - q.z) / dt * 0.2 + rp.vz * 0.8;
+      q.x = rp.x; q.z = rp.z;
+    }
+  }
+  if (G.phase !== 'play' || now < G.holdUntil) {
+    if (G.phase === 'countdown' && now >= G.countEnd) G.phase = 'play';
+    return;
+  }
+  const p = G.puck;
+  if (G.mode !== 'online' || G.owner === me) {
+    // authoritative simulation
+    const r = stepPuck(p, dt, [G.pads.a, G.pads.b]);
+    if (r.hit > simEvents.hit) simEvents.hit = r.hit;
+    if (r.wall > simEvents.wall) simEvents.wall = r.wall;
+    if (r.goal) {
+      if (G.mode !== 'online') concede(r.goal);
+      else if (r.goal === me) concede(me);
+    }
+    // handoff when the puck crosses into the other half
+    if (G.mode === 'online' && sign(opp) * p.z > HYST) { G.owner = opp; G.epoch++; }
+  } else {
+    // prediction: walls + their mallet; our own mallet only once the puck is clearly on our side
+    if (G.predictedGoal) return;
+    const pads = [G.pads[opp]];
+    const mySide = sign(me) * p.z > HYST;
+    if (mySide) pads.push(G.pads[me]);
+    const r = stepPuck(p, dt, pads);
+    if (r.hit > 0.001 && mySide && Math.hypot(p.x - G.pads[me].x, p.z - G.pads[me].z) < PAD_R + PUCK_R + 0.002) {
+      Net.provisional = { epoch: G.epoch, at: now };
+    }
+    if (r.hit > simEvents.hit) simEvents.hit = r.hit;
+    if (r.wall > simEvents.wall) simEvents.wall = r.wall;
+    if (r.goal) { G.predictedGoal = now; p.vx = p.vz = 0; }
+  }
+}
+
+/* =====================================================================
+   14. UI wiring
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.dataset.screen === name));
+  if (G.mode === 'attract') requestAnimationFrame(setAttractCamera);
+}
+function setUI(state) {
+  document.body.classList.toggle('menu', state.startsWith('menu'));
+  document.body.classList.toggle('playing', state === 'playing' || state === 'menu-over');
+}
+let shownScore = { me: -1, opp: -1 };
+function updateScore(force) {
+  const me = G.mode === 'attract' ? 'a' : G.me, opp = other(me);
+  const sMe = G.conceded[opp], sOpp = G.conceded[me];
+  if (force || sMe !== shownScore.me) { const el = $('sMe'); el.textContent = sMe; if (!force) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } }
+  if (force || sOpp !== shownScore.opp) { const el = $('sOpp'); el.textContent = sOpp; if (!force) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } }
+  shownScore = { me: sMe, opp: sOpp };
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200); }
+
+const ALPH = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+const newCode = () => Array.from({ length: 4 }, () => ALPH[Math.floor(Math.random() * ALPH.length)]).join('');
+function hostMatch() {
+  const code = newCode();
+  $('bigcode').innerHTML = code.split('').map(c => `<span>${c}</span>`).join('');
+  $('hoststatus').textContent = 'Getting a code…';
+  showScreen('hosting');
+  startOnline(code, 'host');
+}
+document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => {
+  $('joinerr').textContent = '';
+  if (b.dataset.go === 'home' && G.mode !== 'attract') toAttract();
+  showScreen(b.dataset.go);
+}));
+function markLevel() { document.querySelectorAll('.level').forEach(b => b.classList.toggle('current', b.dataset.level === level)); }
+markLevel();
+document.querySelectorAll('.level').forEach(b => b.addEventListener('click', () => {
+  level = b.dataset.level; markLevel();
+  try { localStorage.setItem('ah-level', level); } catch { }
+  startSolo();
+}));
+$('changelevel').addEventListener('click', () => { toAttract(); showScreen('practice'); });
+$('host').addEventListener('click', hostMatch);
+$('joinform').addEventListener('submit', e => {
+  e.preventDefault();
+  const code = $('codein').value.trim().toUpperCase();
+  if (!/^[A-Z]{4}$/.test(code)) { $('joinerr').textContent = 'Codes are four letters.'; return; }
+  $('joinerr').textContent = '';
+  $('joinstatus').textContent = 'Connecting…';
+  showScreen('joining');
+  startOnline(code, 'join');
+});
+$('codein').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+$('copycode').addEventListener('click', async () => {
+  const code = $('bigcode').textContent;
+  try { await navigator.clipboard.writeText(code); toast(`Copied ${code}`); } catch { toast(`Your code is ${code}`); }
+});
+$('cancelhost').addEventListener('click', () => { toAttract(); showScreen('friend'); });
+$('canceljoin').addEventListener('click', () => { toAttract(); showScreen('friend'); });
+$('leave').addEventListener('click', () => { toAttract(); showScreen('home'); });
+$('tomenu').addEventListener('click', () => { toAttract(); showScreen('home'); });
+$('again').addEventListener('click', () => {
+  if (G.mode === 'solo') { startMatch(G.match + 1); return; }
+  G.want = G.match + 1;
+  $('again').disabled = true; $('rematchwait').hidden = false;
+  if (Net.remoteWant === G.want) startMatch(G.want);
+});
+addEventListener('beforeunload', () => { try { Net.link?.send({ v: 1, bye: 1 }); } catch { } });
+
+/* =====================================================================
+   15. Frame loop
+   ===================================================================== */
+let last = performance.now(), acc = 0, time = 0;
+const tmp = new THREE.Vector3();
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = Math.min((now - last) / 1000, 0.1); last = now; time += dt;
+  acc += dt;
+  let n = 0, stepNow = now - acc * 1000;
+  while (acc >= STEP && n < 60) { stepNow += STEP * 1000; simStep(STEP, stepNow); acc -= STEP; n++; }
+
+  if (simEvents.hit > 0.2) clack(simEvents.hit, 'pad'); else if (simEvents.wall > 0.4) clack(simEvents.wall, 'wall');
+  simEvents.hit = 0; simEvents.wall = 0;
+
+  if (G.mode === 'online' && Net.link) {
+    sendState(now);
+    const ms = Math.round(Net.rtt * 1000), ni = $('netinfo');
+    $('ping').textContent = `${ms} ms ping`;
+    ni.classList.toggle('warn', ms > 90 && ms <= 180); ni.classList.toggle('bad', ms > 180);
+    if (Net.lastRemoteRecv && now - Net.lastRemoteRecv > 6000 && G.phase !== 'over') opponentLeft();
+  }
+
+  // countdown overlay
+  const cEl = $('count');
+  if (G.phase === 'countdown') {
+    const k = Math.ceil((G.countEnd - now) / 800);
+    if (cEl.dataset.k !== String(k) && k > 0) { cEl.dataset.k = k; cEl.innerHTML = `<span>${k}</span>`; }
+  } else if (cEl.dataset.k) { cEl.dataset.k = ''; cEl.innerHTML = ''; }
+
+  // smoothing offsets decay
+  const decay = Math.exp(-dt / 0.07);
+  G.offset.x *= decay; G.offset.z *= decay;
+
+  // --- place objects ---
+  const px = G.puck.x + G.offset.x, pz = G.puck.z + G.offset.z;
+  puckMesh.position.set(px, 0, pz);
+  puckMesh.visible = Math.abs(pz) < HL + PUCK_R * 1.6;
+  for (const s of ['a', 'b']) mallets[s].g.position.set(G.pads[s].x, 0, G.pads[s].z);
+
+  const sp = Math.hypot(G.puck.vx, G.puck.vz);
+  const tOp = clamp((sp - 1.8) / 2.6, 0, 1) * 0.26;
+  trail.material.opacity = puckMesh.visible ? tOp : 0;
+  if (tOp > 0) {
+    const len = 0.05 + sp * 0.05;
+    trail.scale.set(len, PUCK_R * 1.7, 1);
+    trail.rotation.set(-Math.PI / 2, 0, Math.atan2(-G.puck.vz, G.puck.vx));
+    trail.position.set(px - (G.puck.vx / sp) * len / 2, 0.0015, pz - (G.puck.vz / sp) * len / 2);
+  }
+
+  fieldU.uPuck.value.set(px, pz);
+  fieldU.uAir.value = 0.55 + 0.45 * Math.sin(time * 3.1) * 0.25 + clamp(sp / 4, 0, 0.45);
+  if (fieldU.uWaveT.value >= 0) { fieldU.uWaveT.value += dt; if (fieldU.uWaveT.value > 1.5) fieldU.uWaveT.value = -1; }
+  for (const s of ['a', 'b']) {
+    const gl = goalLights[s];
+    if (gl.t > 0) { gl.t = Math.max(0, gl.t - dt * 0.6); gl.mat.emissive.copy(gl.color).multiplyScalar(gl.t * 2.2); }
+  }
+
+  // --- camera ---
+  if (G.mode === 'attract') {
+    cam.theta += dt * (reduceMotion ? 0.03 : 0.07);
+    camT.theta = cam.theta;
+  }
+  const ck = 1 - Math.exp(-dt * (G.mode === 'attract' ? 6 : 2.6));
+  let dth = camT.theta - cam.theta; dth = Math.atan2(Math.sin(dth), Math.cos(dth));
+  cam.theta += dth * ck; cam.elev += (camT.elev - cam.elev) * ck; cam.dist += (camT.dist - cam.dist) * ck; cam.look += (camT.look - cam.look) * ck;
+  cam.sx += (camT.sx - cam.sx) * ck; cam.sy += (camT.sy - cam.sy) * ck; cam.fov += (camT.fov - cam.fov) * ck;
+  camera.fov = cam.fov;
+  applyShift(camera, cam.sx, cam.sy); camera.updateProjectionMatrix();
+  placeCamera(cam);
+  if (shake > 0) {
+    shake = Math.max(0, shake - dt * 3);
+    camera.position.x += (Math.random() - 0.5) * 0.012 * shake;
+    camera.position.y += (Math.random() - 0.5) * 0.012 * shake;
+  }
+  if (!window.__ah?.noRender) renderer.render(scene, camera);
+}
+
+/* ---------- boot ---------- */
+resize();
+servePuck('a');
+paintMallets();
+updateScore(true);
+Object.assign(cam, { dist: camT.dist * 1.4, fov: camT.fov, sx: camT.sx, sy: camT.sy, elev: camT.elev });
+requestAnimationFrame(frame);
+
+// test hook (read-mostly)
+window.__ah = {
+  G, Net, AI, LEVELS, noRender: false,
+  get level() { return level; },
+  set autopilot(v) { autopilot = v; }, get autopilot() { return autopilot; },
+};
+</script>
+</body>
+</html>
