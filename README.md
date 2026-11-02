@@ -1,4 +1,4 @@
-# Air Hockey v0.02
+# Air Hockey v0.03
 
 An installable web app (PWA). Static files only: no build step, no server code.
 

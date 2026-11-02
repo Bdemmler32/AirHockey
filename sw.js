@@ -3,7 +3,7 @@
    Browsers re-download sw.js on every check (updateViaCache: 'none'); any byte change
    installs a new worker, which re-fetches the app shell past every HTTP cache and then
    waits until the player taps "Update". */
-const VERSION = '0.02';
+const VERSION = '0.03';
 const CACHE = `airhockey-${VERSION}`;
 const RUNTIME = 'airhockey-cdn';              // pinned third-party files; versioned URLs, kept across updates
 
