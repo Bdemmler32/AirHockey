@@ -126,7 +126,8 @@ body:not(.playing) #menubtn{visibility:hidden}
   animation:sheetIn .28s cubic-bezier(.2,.8,.2,1) both}
 @keyframes fadeIn{from{opacity:0}}
 @keyframes sheetIn{from{opacity:0;transform:translateY(8px) scale(.97)}}
-h3{font-family:var(--display);font-weight:800;font-size:34px;line-height:.9;margin:0 0 14px}
+h3{font-family:var(--display);font-weight:800;font-size:34px;line-height:.9;margin:0 0 6px}
+.gmsub{margin:0 0 16px}
 .setting{margin:0 0 14px}
 .setting-row{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:600;margin-bottom:6px}
 .setting-row output{font-variant-numeric:tabular-nums;font-weight:500;color:var(--ink-soft)}
@@ -255,9 +256,11 @@ input.code::placeholder{color:rgba(26,33,64,.25);letter-spacing:.18em}
 .link.inline{margin:0;padding:0;font-size:12px}
 
 /* ---------- two players, one device ---------- */
-body.coop .score, body.coop .netinfo, body.coop #count{display:none}
+body.board .score{display:none}
+body.coop .netinfo, body.coop #count{display:none}
 #coopui{position:absolute;inset:0;pointer-events:none;display:none}
-body.coop #coopui{display:block}
+body.board #coopui{display:block}
+body:not(.coop) #cmsgA, body:not(.coop) #cmsgB{display:none}
 .cblock{position:absolute;left:0;top:0;will-change:transform}
 .cscore{display:flex;align-items:center;gap:.2em;font-family:var(--display);font-weight:900;
   font-size:clamp(40px, 8vmin, 72px);line-height:.9;color:rgba(243,245,250,.92);
@@ -333,6 +336,7 @@ body.coop #coopui{display:block}
 <div id="gamemenu" role="dialog" aria-modal="true" aria-labelledby="gmtitle" hidden>
   <div class="card">
     <h3 id="gmtitle">Paused</h3>
+    <p class="fine gmsub" id="gmsub"></p>
       <div class="setting">
         <div class="setting-row"><label for="air1">Air pressure</label><output class="airout">60%</output></div>
         <input type="range" class="airin" id="air1" min="0" max="100" step="5" value="60">
@@ -463,13 +467,13 @@ let AIR = 0.6;
 function setAir(a) {
   AIR = clamp(a, 0, 1);
   FRICTION = 0.05 + Math.pow(1 - AIR, 2) * 1.8;   // 0.05 /s (glassy) … 1.85 /s (sticky)
-  MAX_PUCK = 3.0 + 1.8 * AIR;                      // 3.0 … 4.8 m/s
+  MAX_PUCK = 3.6 + 2.6 * AIR;                      // ceiling 3.6 … 6.2 m/s, approached gradually
 }
 const WALL_E = 0.9, PAD_E = 0.88;
 const HYST = PUCK_R;                 // handoff hysteresis around the centre line
 const WIN = 7;
 const COL = { you: 0xFFB21E, them: 0xFF6F8E };
-const APP_VERSION = '0.03';
+const APP_VERSION = '0.04';
 
 const sign = s => (s === 'a' ? 1 : -1);   // side a defends +z, side b defends -z
 const other = s => (s === 'a' ? 'b' : 'a');
@@ -479,14 +483,24 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* =====================================================================
    2. Physics — plain 2D circles, deterministic, no engine
    ===================================================================== */
-function circleHit(p, cx, cz, cr, cvx, cvz, e) {
+const GRIP = 0.5;    // share of the mallet's sideways motion passed to the puck on contact
+function circleHit(p, cx, cz, cr, cvx, cvz, e, grip = 0) {
   const R = PUCK_R + cr, dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
   if (d2 >= R * R) return 0;
   const d = Math.sqrt(d2);
   const nx = d > 1e-6 ? dx / d : 0, nz = d > 1e-6 ? dz / d : 1;
   p.x = cx + nx * R; p.z = cz + nz * R;                       // push out
   const vn = (p.vx - cvx) * nx + (p.vz - cvz) * nz;
-  if (vn < 0) { p.vx -= (1 + e) * vn * nx; p.vz -= (1 + e) * vn * nz; return -vn; }
+  if (vn < 0) {
+    p.vx -= (1 + e) * vn * nx; p.vz -= (1 + e) * vn * nz;
+    if (grip) {
+      // the rim's friction: pull the puck's sideways velocity part-way toward the mallet's,
+      // so a diagonal swing steers the shot instead of being thrown away
+      const tx = -nz, tz = nx, vt = (p.vx - cvx) * tx + (p.vz - cvz) * tz;
+      p.vx -= grip * vt * tx; p.vz -= grip * vt * tz;
+    }
+    return -vn;
+  }
   return 0.0001;
 }
 function walls(p) {
@@ -509,11 +523,47 @@ function walls(p) {
   return hit;
 }
 /** Advance the puck one step. Returns { hit, wall, goal } where goal is the side that conceded. */
+/** Exact moment within this step that the puck first touches mallet q (0…1), or -1.
+    Without this, fast exchanges overlap by several cm before being noticed, and the bounce
+    angle depends on frame timing instead of where they actually touched. */
+function contactTime(x0, z0, x1, z1, q) {
+  const qx0 = q.px ?? q.x, qz0 = q.pz ?? q.z, R = PUCK_R + PAD_R;
+  const rx = x0 - qx0, rz = z0 - qz0, dx = (x1 - x0) - (q.x - qx0), dz = (z1 - z0) - (q.z - qz0);
+  const a = dx * dx + dz * dz, b = 2 * (rx * dx + rz * dz), c = rx * rx + rz * rz - R * R;
+  if (c <= 0 || a < 1e-14) return -1;                // already touching, or no relative motion
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return -1;
+  const t = (-b - Math.sqrt(disc)) / (2 * a);
+  return t >= 0 && t <= 1 ? t : -1;
+}
 function stepPuck(p, dt, pads) {
+  const x0 = p.x, z0 = p.z;
   p.x += p.vx * dt; p.z += p.vz * dt;
   const f = Math.exp(-FRICTION * dt); p.vx *= f; p.vz *= f;
   let hit = 0;
-  for (const q of pads) hit = Math.max(hit, circleHit(p, q.x, q.z, PAD_R, q.vx, q.vz, PAD_E));
+  for (const q of pads) {
+    const t = contactTime(x0, z0, p.x, p.z, q);
+    if (t >= 0) {
+      // rewind both to the instant of contact, bounce there, then spend the rest of the step moving away
+      const qx = (q.px ?? q.x) + (q.x - (q.px ?? q.x)) * t, qz = (q.pz ?? q.z) + (q.z - (q.pz ?? q.z)) * t;
+      p.x = x0 + (p.x - x0) * t; p.z = z0 + (p.z - z0) * t;
+      const h = circleHit(p, qx, qz, PAD_R + 1e-6, q.vx, q.vz, PAD_E, GRIP);
+      if (h > 0.001) {
+        const sp = Math.hypot(p.vx, p.vz);
+        if (sp > 1e-6) { const k = MAX_PUCK * Math.tanh(sp / MAX_PUCK) / sp; p.vx *= k; p.vz *= k; }
+      }
+      p.x += p.vx * dt * (1 - t); p.z += p.vz * dt * (1 - t);
+      hit = Math.max(hit, h);
+      continue;
+    }
+    const h = circleHit(p, q.x, q.z, PAD_R, q.vx, q.vz, PAD_E, GRIP);
+    if (h > 0.001) {
+      // soft ceiling: harder swings still hit harder, with diminishing returns
+      const sp = Math.hypot(p.vx, p.vz);
+      if (sp > 1e-6) { const k = MAX_PUCK * Math.tanh(sp / MAX_PUCK) / sp; p.vx *= k; p.vz *= k; }
+    }
+    hit = Math.max(hit, h);
+  }
   const wall = walls(p);
   for (const q of pads) {
     const dx = p.x - q.x, dz = p.z - q.z, R = PUCK_R + PAD_R, d = Math.hypot(dx, dz);
@@ -902,20 +952,13 @@ function fitDist(theta, elev, look, box) {
   }
   return hi;
 }
-function setPlayCamera() {
-  const portrait = camera.aspect < 1;
-  camT.theta = G.me === 'a' ? 0 : Math.PI;
-  camT.elev = portrait ? 1.12 : 0.92;
-  camT.fov = portrait ? 26 : 28;   // a longer lens keeps the near end from splaying
-  camT.look = -sign(G.me) * 0.06;
-  const box = safeBox(portrait ? 110 : 60, 14, 14);                  // room for the score
-  camT.sx = 0; camT.sy = (box.y0 + box.y1) / 4;                      // centre the table in the free space
-  camT.dist = fitDist(camT.theta, camT.elev, camT.look, box);
-}
-function setCoopCamera() {
-  // straight down, long lens: both ends look the same, so neither player is favoured
+function setPlayCamera() { setBoardCamera(G.me); }
+function setCoopCamera() { setBoardCamera('a'); }
+function setBoardCamera(near) {
+  // every mode plays on the same board: straight down, long lens, as big as the screen allows.
+  // `near` is the side drawn at the bottom (portrait) or on the left (landscape).
   const landscape = VW > VH;
-  camT.theta = landscape ? Math.PI / 2 : 0;
+  camT.theta = landscape ? (near === 'a' ? Math.PI / 2 : -Math.PI / 2) : (near === 'a' ? 0 : Math.PI);
   camT.elev = 1.53; camT.fov = 22; camT.look = 0;
   const box = safeBox(landscape ? 10 : 30, 10, landscape ? 30 : 10);
   camT.sx = (box.x0 + box.x1) / 4; camT.sy = (box.y0 + box.y1) / 4;
@@ -1294,6 +1337,7 @@ function startMatch(n) {
   G.pads.b = { x: 0, z: -HL * 0.8, vx: 0, vz: 0 };
   G.target = { x: 0, z: sign(G.me) * HL * 0.8 };
   G.targets = { a: { x: 0, z: HL * 0.8 }, b: { x: 0, z: -HL * 0.8 } };
+  for (const s of ['a', 'b']) { const t = humanTarget(s); inFrom[s].x = stepT[s].x = t.x; inFrom[s].z = stepT[s].z = t.z; }
   fingers.clear();
   $('cactions').hidden = true;
   const server = n % 2 === 1 ? 'a' : 'b';
@@ -1378,7 +1422,7 @@ function startCoop() {
   topDownLook(true);
   resetNet();
   G.mode = 'coop'; G.me = 'a';
-  document.body.classList.add('coop');
+  document.body.classList.add('coop', 'board');
   paintMallets(); setCoopCamera();
   startMatch(1);
   keepAwake(true);
@@ -1386,7 +1430,7 @@ function startCoop() {
 function toAttract() {
   G.paused = false; $('gamemenu').hidden = true;
   if (Net.role === 'join') { loadSettings(); }          // drop the host's air pressure, back to ours
-  document.body.classList.remove('coop');
+  document.body.classList.remove('coop', 'board');
   topDownLook(false);
   keepAwake(false);
   try { Net.link?.send({ v: 1, bye: 1 }); } catch { }
@@ -1404,7 +1448,7 @@ function toAttract() {
 function startSolo() {
   ensureAudio();
   keepAwake(true);
-  document.querySelector('.score .to').textContent = `First to 7, ${LEVELS[level].label.toLowerCase()} computer`;
+  document.body.classList.add('board'); topDownLook(true);
   resetNet();
   G.mode = 'solo'; G.me = 'a';
   paintMallets(); setPlayCamera();
@@ -1438,7 +1482,7 @@ async function startOnline(code, role) {
   link.onclose = opponentLeft;
   G.mode = 'online'; G.me = role === 'host' ? 'a' : 'b';
   keepAwake(true);
-  document.querySelector('.score .to').textContent = 'First to 7';
+  document.body.classList.add('board'); topDownLook(true);
   paintMallets(); setPlayCamera();
   document.getElementById('netinfo').hidden = false;
   startMatch(1);
@@ -1453,15 +1497,16 @@ let simEvents = { hit: 0, wall: 0 };
 function simStep(dt, now) {
   if (G.paused) return;
   const me = G.me, opp = other(me);
+  for (const s of ['a', 'b']) { G.pads[s].px = G.pads[s].x; G.pads[s].pz = G.pads[s].z; }
   if (G.mode === 'attract') { aiMove('a', dt, DEMO); aiMove('b', dt, DEMO); }
   else {
     if (G.mode === 'coop') {
       for (const s of ['a', 'b']) {
         if (autopilot) aiMove(s, dt, autopilot === true ? PILOT : autopilot);
-        else movePad(G.pads[s], G.targets[s].x, G.targets[s].z, dt, s);
+        else movePad(G.pads[s], stepT[s].x, stepT[s].z, dt, s);
       }
     } else {
-      if (autopilot) aiMove(me, dt, autopilot === true ? PILOT : autopilot); else movePad(G.pads[me], G.target.x, G.target.z, dt, me);
+      if (autopilot) aiMove(me, dt, autopilot === true ? PILOT : autopilot); else movePad(G.pads[me], stepT[me].x, stepT[me].z, dt, me);
     }
     if (G.mode === 'solo') aiMove('b', dt, LEVELS[level]);
   }
@@ -1616,6 +1661,8 @@ function openMenu() {
   const online = G.mode === 'online';
   if (!online) G.paused = true;               // you can't pause someone else's game
   $('gmtitle').textContent = online ? 'Match menu' : 'Paused';
+  $('gmsub').textContent = online ? 'Online match, first to 7. The game keeps running while this is open.'
+    : G.mode === 'coop' ? 'Two players, first to 7.' : `Against the ${LEVELS[level].label.toLowerCase()} computer, first to 7.`;
   $('restart').hidden = online;
   syncSettingsUI();
   $('gamemenu').hidden = false; $('menubtn').setAttribute('aria-expanded', 'true');
@@ -1648,12 +1695,15 @@ function facing(s) {   // screen angle (deg) that makes text upright for the pla
   return Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI + 90;
 }
 let lastCount = {};
-function layoutCoop(now) {
+function layoutBoard(now) {
+  const coop = G.mode === 'coop';
   for (const s of ['a', 'b']) {
-    const S = s.toUpperCase(), ang = facing(s), g = sign(s);
+    // two people at one screen: each score faces its owner. One person: both read upright.
+    const S = s.toUpperCase(), ang = coop ? facing(s) : 0, g = sign(s);
     const [sx, sy] = toScreen(g * (HW - 0.1), g * (HL - 0.14));    // in the player's right-hand corner, clear of the mallet
     $('cscore' + S).style.transform = `translate(${sx}px,${sy}px) translate(-50%,-50%) rotate(${ang}deg)`;
     $('cscore' + S).querySelector('.num').textContent = G.conceded[other(s)];
+    if (!coop) continue;
     const [mx, my] = toScreen(0, g * 0.5);
     const m = $('cmsg' + S);
     m.style.transform = `translate(${mx}px,${my}px) translate(-50%,-50%) rotate(${ang}deg)`;
@@ -1671,13 +1721,28 @@ function layoutCoop(now) {
    15. Frame loop
    ===================================================================== */
 let last = performance.now(), acc = 0, time = 0;
+/* Fingers report once per frame but physics runs ~4 steps per frame. Rather than jumping to the new
+   finger position in the first step and then standing still (which made identical swipes hit
+   anywhere from hard to barely), each step gets a target part-way along the finger's path. */
+const humanTarget = s => (G.mode === 'coop' ? G.targets[s] : G.target);
+const inFrom = { a: { x: 0, z: 0.8 }, b: { x: 0, z: -0.8 } };
+const stepT = { a: { x: 0, z: 0.8 }, b: { x: 0, z: -0.8 } };
 const tmp = new THREE.Vector3();
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = Math.min((now - last) / 1000, 0.1); last = now; time += dt;
   acc += dt;
   let n = 0, stepNow = now - acc * 1000;
-  while (acc >= STEP && n < 60) { stepNow += STEP * 1000; simStep(STEP, stepNow); acc -= STEP; n++; }
+  const steps = Math.min(60, Math.floor(acc / STEP));
+  while (acc >= STEP && n < 60) {
+    const f = (n + 1) / steps;
+    for (const s of ['a', 'b']) {
+      const to = humanTarget(s);
+      stepT[s].x = inFrom[s].x + (to.x - inFrom[s].x) * f; stepT[s].z = inFrom[s].z + (to.z - inFrom[s].z) * f;
+    }
+    stepNow += STEP * 1000; simStep(STEP, stepNow); acc -= STEP; n++;
+  }
+  if (steps > 0) for (const s of ['a', 'b']) { const to = humanTarget(s); inFrom[s].x = to.x; inFrom[s].z = to.z; }
 
   if (simEvents.hit > 0.2) clack(simEvents.hit, 'pad'); else if (simEvents.wall > 0.4) clack(simEvents.wall, 'wall');
   simEvents.hit = 0; simEvents.wall = 0;
@@ -1690,7 +1755,7 @@ function frame(now) {
     if (Net.lastRemoteRecv && now - Net.lastRemoteRecv > 6000 && G.phase !== 'over') opponentLeft();
   }
 
-  if (G.mode === 'coop') layoutCoop(now);
+  if (G.mode !== 'attract') layoutBoard(now);
 
   // countdown overlay
   const cEl = $('count');
@@ -1798,7 +1863,7 @@ requestAnimationFrame(frame);
 
 // test hook (read-mostly)
 window.__ah = {
-  G, Net, AI, LEVELS, noRender: false,
+  G, Net, AI, LEVELS, noRender: false, toScreen: (x, z) => toScreen(x, z), get maxPuck() { return MAX_PUCK; },
   get level() { return level; },
   set autopilot(v) { autopilot = v; }, get autopilot() { return autopilot; },
 };
