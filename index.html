@@ -410,8 +410,9 @@ body:not(.coop) #cmsgA, body:not(.coop) #cmsgB{display:none}
       <h2>Your match code</h2>
       <div class="bigcode" id="bigcode" aria-live="polite"></div>
       <div class="waiting"><span class="pulse"></span><span id="hoststatus">Getting a code…</span></div>
-      <p class="fine">Your friend opens this same file, chooses Play a friend, and types the code.</p>
+      <p class="fine">Send your friend an invite link, or have them open Air Hockey, choose Play a friend online, and enter the code.</p>
       <div class="actions">
+        <button class="btn primary" id="shareinvite">Share invite <span class="puck"></span></button>
         <button class="btn secondary" id="copycode">Copy code <span class="puck"></span></button>
       </div>
       <button class="link" id="cancelhost">Cancel</button>
@@ -473,7 +474,7 @@ const WALL_E = 0.9, PAD_E = 0.88;
 const HYST = PUCK_R;                 // handoff hysteresis around the centre line
 const WIN = 7;
 const COL = { you: 0xFFB21E, them: 0xFF6F8E };
-const APP_VERSION = '0.04';
+const APP_VERSION = '0.05';
 
 const sign = s => (s === 'a' ? 1 : -1);   // side a defends +z, side b defends -z
 const other = s => (s === 'a' ? 'b' : 'a');
@@ -1621,6 +1622,15 @@ $('joinform').addEventListener('submit', e => {
   startOnline(code, 'join');
 });
 $('codein').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+function inviteLink(code) { return `${location.origin}${location.pathname}#${code}`; }
+$('shareinvite').addEventListener('click', async () => {
+  const code = $('bigcode').textContent, url = inviteLink(code);
+  const data = { title: 'Air Hockey', text: `Play air hockey with me. Match code ${code}.`, url };
+  try {
+    if (navigator.share) { await navigator.share(data); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast('Invite link copied'); } catch { toast(url); }
+});
 $('copycode').addEventListener('click', async () => {
   const code = $('bigcode').textContent;
   try { await navigator.clipboard.writeText(code); toast(`Copied ${code}`); } catch { toast(`Your code is ${code}`); }
@@ -1852,8 +1862,21 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   }).catch(() => { });
 }
 
+/* ---------- invite links: …/#CODE joins that match ---------- */
+function joinFromLink() {
+  const m = location.hash.match(/^#([A-Za-z]{4})$/);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);   // so a reload doesn't rejoin
+  if (G.mode !== 'attract') return;
+  $('codein').value = m[1].toUpperCase();
+  showScreen('friend');
+  $('joinform').requestSubmit();
+}
+addEventListener('hashchange', joinFromLink);
+
 /* ---------- boot ---------- */
 resize();
+setTimeout(joinFromLink, 0);
 document.fonts?.ready.then(resize);                 // the menu card grows once its fonts arrive
 servePuck('a');
 paintMallets();
