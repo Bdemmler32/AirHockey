@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#B9BEC7">
+<meta name="description" content="Air hockey for one or two players: online, on one device, or against the computer.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Air Hockey">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Air Hockey</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,6 +44,9 @@
   --safe-r:env(safe-area-inset-right,0px);
 }
 *{box-sizing:border-box}
+html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+input{-webkit-user-select:text;user-select:text}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none !important}
 html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
 body{
@@ -134,9 +147,10 @@ body.menu #panel{opacity:1;transform:none;pointer-events:auto}
 h1{
   font-family:var(--display);font-weight:900;
   font-size:clamp(64px, 11vh, 104px);
-  line-height:.82;letter-spacing:-.005em;margin:0 0 14px;
+  line-height:.82;letter-spacing:-.005em;
+  margin:0 0 calc(.24em + 6px);          /* the y's tail drops .22em below the baseline */
 }
-h1 .line2{display:block;color:var(--cobalt)}
+h1 .line2{display:block;color:var(--cobalt);margin-left:-.031em}   /* h's stem sits .031em in; A's foot sits at 0 */
 h2{font-family:var(--display);font-weight:800;font-size:44px;line-height:.9;margin:0 0 12px}
 p{margin:0 0 18px;font-size:15px;line-height:1.5;color:var(--ink-soft);max-width:36ch}
 p.fine{font-size:13px;margin-top:-6px}
@@ -194,6 +208,41 @@ input.code::placeholder{color:rgba(26,33,64,.25);letter-spacing:.18em}
 .waiting .pulse{width:10px;height:10px;border-radius:50%;background:var(--cobalt);animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{transform:scale(.7);opacity:.45}50%{transform:scale(1);opacity:1}}
 .err{color:#B4322A;font-size:14px;font-weight:500;margin:10px 0 0;min-height:1em}
+.ver{margin-top:14px;font-size:12px;color:var(--ink-soft);opacity:.75}
+
+/* ---------- two players, one device ---------- */
+body.coop .score, body.coop .netinfo, body.coop #count{display:none}
+#coopui{position:fixed;inset:0;pointer-events:none;display:none}
+body.coop #coopui{display:block}
+.cblock{position:absolute;left:0;top:0;will-change:transform}
+.cscore{display:flex;align-items:center;gap:.2em;font-family:var(--display);font-weight:900;
+  font-size:clamp(40px, 8vmin, 72px);line-height:.9;color:rgba(243,245,250,.92);
+  text-shadow:0 2px 12px rgba(10,20,70,.35);font-variant-numeric:tabular-nums}
+.cscore .chip{width:.26em;height:.26em;border-radius:50%;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
+.cscore.a .chip{background:var(--saffron)} .cscore.b .chip{background:var(--flamingo)}
+.cmsg{font-family:var(--display);font-weight:900;color:var(--paper);text-align:center;white-space:nowrap;
+  text-shadow:0 6px 30px rgba(10,20,70,.4);line-height:.9}
+.cmsg.count{font-size:min(30vw, 22vh)}
+.cmsg.cres{font-size:min(16vw, 12vh)}
+.cmsg small{display:block;font-size:.34em;font-weight:800;opacity:.85;margin-top:.15em}
+.cmsg .pop{display:inline-block;animation:countIn .9s cubic-bezier(.2,.8,.2,1) both}
+.cmsg.cres .pop{animation:resultIn .6s cubic-bezier(.2,.8,.2,1) both}
+@keyframes resultIn{from{transform:scale(1.25);opacity:0}to{transform:none;opacity:1}}
+.cactions{position:absolute;left:0;top:0;display:flex;gap:10px;pointer-events:auto}
+.cactions .btn{padding:12px 18px;box-shadow:0 8px 30px rgba(10,20,70,.25)}
+.cactions .btn.secondary{background:rgba(243,245,250,.9)}
+
+/* ---------- update prompt ---------- */
+#update{
+  position:fixed;left:50%;top:calc(14px + var(--safe-t));transform:translate(-50%,-140%);
+  display:flex;align-items:center;gap:12px;z-index:5;
+  background:var(--ink);color:var(--paper);border-radius:14px;padding:8px 8px 8px 16px;
+  font-size:14px;font-weight:500;box-shadow:0 10px 40px rgba(26,33,64,.3);
+  transition:transform .45s cubic-bezier(.2,.8,.2,1);max-width:calc(100vw - 24px)
+}
+#update.show{transform:translate(-50%,0)}
+#update button{appearance:none;border:0;border-radius:10px;padding:9px 14px;font:600 14px var(--text);
+  background:var(--saffron);color:var(--ink);cursor:pointer}
 .result{font-family:var(--display);font-weight:800;font-size:28px;color:var(--ink-soft);margin:-4px 0 18px;font-variant-numeric:tabular-nums}
 
 @media (max-height:560px) and (orientation:landscape){
@@ -225,17 +274,30 @@ input.code::placeholder{color:rgba(26,33,64,.25);letter-spacing:.18em}
   <button id="leave" type="button">Leave</button>
 </div>
 <div id="count"></div>
+<div id="coopui" aria-live="polite">
+  <div class="cblock" id="cscoreA"><div class="cscore a"><span class="chip"></span><span class="num">0</span></div></div>
+  <div class="cblock" id="cscoreB"><div class="cscore b"><span class="chip"></span><span class="num">0</span></div></div>
+  <div class="cblock" id="cmsgA"><div class="cmsg"></div></div>
+  <div class="cblock" id="cmsgB"><div class="cmsg"></div></div>
+  <div class="cactions" id="cactions" hidden>
+    <button class="btn primary" id="coopagain" type="button">Play again</button>
+    <button class="btn secondary" id="coopmenu" type="button">Menu</button>
+  </div>
+</div>
+<div id="update" role="status"><span>A new version is ready</span><button type="button" id="updatebtn">Update</button></div>
 <div id="toast" role="status"></div>
 
 <div id="panel">
   <div class="card">
     <section class="screen on" data-screen="home">
       <h1>Air<span class="line2">hockey</span></h1>
-      <p>First to seven wins. Play a friend online, or warm up against the computer.</p>
+      <p>First to seven wins. Play a friend online or across one screen, or warm up against the computer.</p>
       <div class="actions">
-        <button class="btn primary" data-go="friend">Play a friend <span class="puck"></span></button>
+        <button class="btn primary" data-go="friend">Play a friend online <span class="puck"></span></button>
+        <button class="btn secondary" id="coop">Two players, one device <span class="puck"></span></button>
         <button class="btn secondary" data-go="practice">Practice against the computer <span class="puck"></span></button>
       </div>
+      <div class="ver" id="ver"></div>
     </section>
 
     <section class="screen" data-screen="practice">
@@ -313,7 +375,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
    ===================================================================== */
 const HW = 0.5, HL = 1.0;            // half width / half length of the playfield
 const PUCK_R = 0.045, PAD_R = 0.075;     // sized for thumbs: ~44pt mallet on a phone
-const GOAL_HW = 0.2;               // half width of the goal mouth
+const GOAL_HW = 0.18;          // 36 cm mouth: about 2.4 mallet-widths               // half width of the goal mouth
 const RAIL_T = 0.07, RAIL_H = 0.05, BUMP = 0.007;   // rails sit just outside a rubber bumper strip
 const STEP = 1 / 240;                // fixed physics step
 const MAX_PUCK = 4.6;                // m/s
@@ -323,6 +385,7 @@ const WALL_E = 0.9, PAD_E = 0.88;
 const HYST = PUCK_R;                 // handoff hysteresis around the centre line
 const WIN = 7;
 const COL = { you: 0xFFB21E, them: 0xFF6F8E };
+const APP_VERSION = '0.01';
 
 const sign = s => (s === 'a' ? 1 : -1);   // side a defends +z, side b defends -z
 const other = s => (s === 'a' ? 'b' : 'a');
@@ -413,6 +476,7 @@ const G = {
   puck: { x: 0, z: 0.4, vx: 0, vz: 0 },
   pads: { a: { x: 0, z: 0.8, vx: 0, vz: 0 }, b: { x: 0, z: -0.8, vx: 0, vz: 0 } },
   target: { x: 0, z: 0.8 },
+  targets: { a: { x: 0, z: 0.8 }, b: { x: 0, z: -0.8 } },   // two players, one device
   owner: 'a', epoch: 0,     // puck authority (online)
   conceded: { a: 0, b: 0 },
   match: 1, want: 1,
@@ -731,6 +795,13 @@ function setPlayCamera() {
   camT.sx = camT.sy = 0;
   camT.dist = fitDist(camT.theta, camT.elev, camT.look, { x0: -0.93, x1: 0.93, y0: -0.93, y1: portrait ? 0.74 : 0.86 });
 }
+function setCoopCamera() {
+  // straight down, long lens: both ends look the same, so neither player is favoured
+  const landscape = innerWidth > innerHeight;
+  camT.theta = landscape ? Math.PI / 2 : 0;
+  camT.elev = 1.53; camT.fov = 22; camT.look = 0; camT.sx = camT.sy = 0;
+  camT.dist = fitDist(camT.theta, camT.elev, 0, { x0: -0.95, x1: 0.95, y0: -0.93, y1: 0.93 });
+}
 function setAttractCamera() {
   // frame the table in the space the menu card leaves free
   const w = innerWidth, h = innerHeight, side = w >= 760;
@@ -757,7 +828,7 @@ function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
-  if (G.mode === 'attract') setAttractCamera(); else setPlayCamera();
+  if (G.mode === 'attract') setAttractCamera(); else if (G.mode === 'coop') setCoopCamera(); else setPlayCamera();
 }
 addEventListener('resize', resize);
 
@@ -768,20 +839,42 @@ addEventListener('resize', resize);
 const ray = new THREE.Raycaster();
 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02);
 const hitPt = new THREE.Vector3();
-function pointerToTable(e) {
+function tableHit(e) {
   const r = canvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  if (!ray.ray.intersectPlane(plane, hitPt)) return;
-  const touchLead = e.pointerType === 'touch' ? 0.095 : 0;
-  G.target.x = hitPt.x;
-  G.target.z = hitPt.z - sign(G.me) * touchLead;
+  return ray.ray.intersectPlane(plane, hitPt) ? hitPt : null;
 }
-canvas.addEventListener('pointermove', e => { if (G.mode !== 'attract') pointerToTable(e); });
+function aimAt(target, side, h, e) {
+  const touchLead = e.pointerType === 'touch' ? 0.095 : 0;   // keep the mallet just ahead of the fingertip
+  target.x = h.x; target.z = h.z - sign(side) * touchLead;
+}
+function pointerToTable(e) { const h = tableHit(e); if (h) aimAt(G.target, G.me, h, e); }
+// Two players, one device: each finger belongs to the half it first touched.
+const fingers = new Map();
+function coopPointer(e, down) {
+  const h = tableHit(e); if (!h) return;
+  let side = fingers.get(e.pointerId);
+  if (!side) {
+    if (!down && e.pointerType !== 'mouse') return;
+    side = h.z >= 0 ? 'a' : 'b';
+    if (down) fingers.set(e.pointerId, side);
+  }
+  aimAt(G.targets[side], side, h, e);
+}
+canvas.addEventListener('pointermove', e => {
+  if (G.mode === 'attract') return;
+  if (G.mode === 'coop') coopPointer(e, false); else pointerToTable(e);
+});
 canvas.addEventListener('pointerdown', e => {
   if (G.mode === 'attract') return;
-  canvas.setPointerCapture(e.pointerId); pointerToTable(e); ensureAudio();
+  try { canvas.setPointerCapture(e.pointerId); } catch { }
+  ensureAudio();
+  if (G.mode === 'coop') coopPointer(e, true); else pointerToTable(e);
 });
+const dropFinger = e => fingers.delete(e.pointerId);
+canvas.addEventListener('pointerup', dropFinger);
+canvas.addEventListener('pointercancel', dropFinger);
 
 /* =====================================================================
    8. Sound: tiny synthesised clacks (no assets)
@@ -1075,6 +1168,9 @@ function startMatch(n) {
   G.pads.a = { x: 0, z: HL * 0.8, vx: 0, vz: 0 };
   G.pads.b = { x: 0, z: -HL * 0.8, vx: 0, vz: 0 };
   G.target = { x: 0, z: sign(G.me) * HL * 0.8 };
+  G.targets = { a: { x: 0, z: HL * 0.8 }, b: { x: 0, z: -HL * 0.8 } };
+  fingers.clear();
+  $('cactions').hidden = true;
   const server = n % 2 === 1 ? 'a' : 'b';
   G.owner = server; G.epoch = n * 1000;
   servePuck(server);
@@ -1116,6 +1212,15 @@ function concede(defender) {
 function endMatch(winner) {
   if (G.phase === 'over' || G.mode === 'attract') return;
   G.phase = 'over';
+  if (G.mode === 'coop') {
+    for (const s of ['a', 'b']) {
+      const el = $('cmsg' + s.toUpperCase()).firstElementChild;
+      el.className = 'cmsg cres';
+      el.innerHTML = `<span class="pop">${s === winner ? 'You win' : 'You lose'}<small>${G.conceded[other(s)]}–${G.conceded[s]}</small></span>`;
+    }
+    $('cactions').hidden = false;
+    return;
+  }
   const you = G.me, mine = G.conceded[other(you)], theirs = G.conceded[you];
   document.getElementById('overtitle').textContent = winner === you ? 'You win' : 'You lose';
   document.getElementById('overscore').textContent = `${mine}–${theirs}`;
@@ -1130,7 +1235,33 @@ function opponentLeft() {
   Net.link?.close(); Net.link = null;
   showScreen('left'); setUI('menu-over');
 }
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch { wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && G.mode !== 'attract') keepAwake(true); });
+function topDownLook(on) {
+  scene.environmentIntensity = on ? 0.22 : 0.55;
+  fieldMat.clearcoatRoughness = on ? 0.3 : 0.09;
+  fieldMat.roughness = on ? 0.42 : 0.3;
+}
+function startCoop() {
+  ensureAudio();
+  topDownLook(true);
+  resetNet();
+  G.mode = 'coop'; G.me = 'a';
+  document.body.classList.add('coop');
+  paintMallets(); setCoopCamera();
+  startMatch(1);
+  keepAwake(true);
+}
 function toAttract() {
+  document.body.classList.remove('coop');
+  topDownLook(false);
+  keepAwake(false);
   try { Net.link?.send({ v: 1, bye: 1 }); } catch { }
   Net.link?.close(); Net.link = null;
   Net._pending?._cancel?.();
@@ -1145,6 +1276,7 @@ function toAttract() {
 }
 function startSolo() {
   ensureAudio();
+  keepAwake(true);
   document.querySelector('.score .to').textContent = `First to 7, ${LEVELS[level].label.toLowerCase()} computer`;
   resetNet();
   G.mode = 'solo'; G.me = 'a';
@@ -1178,6 +1310,7 @@ async function startOnline(code, role) {
   link.onmessage = onPacket;
   link.onclose = opponentLeft;
   G.mode = 'online'; G.me = role === 'host' ? 'a' : 'b';
+  keepAwake(true);
   document.querySelector('.score .to').textContent = 'First to 7';
   paintMallets(); setPlayCamera();
   document.getElementById('netinfo').hidden = false;
@@ -1194,7 +1327,14 @@ function simStep(dt, now) {
   const me = G.me, opp = other(me);
   if (G.mode === 'attract') { aiMove('a', dt, DEMO); aiMove('b', dt, DEMO); }
   else {
-    if (autopilot) aiMove(me, dt, autopilot === true ? PILOT : autopilot); else movePad(G.pads[me], G.target.x, G.target.z, dt, me);
+    if (G.mode === 'coop') {
+      for (const s of ['a', 'b']) {
+        if (autopilot) aiMove(s, dt, autopilot === true ? PILOT : autopilot);
+        else movePad(G.pads[s], G.targets[s].x, G.targets[s].z, dt, s);
+      }
+    } else {
+      if (autopilot) aiMove(me, dt, autopilot === true ? PILOT : autopilot); else movePad(G.pads[me], G.target.x, G.target.z, dt, me);
+    }
     if (G.mode === 'solo') aiMove('b', dt, LEVELS[level]);
   }
   if (G.mode === 'online') {
@@ -1281,6 +1421,10 @@ document.querySelectorAll('.level').forEach(b => b.addEventListener('click', () 
   startSolo();
 }));
 $('changelevel').addEventListener('click', () => { toAttract(); showScreen('practice'); });
+$('coop').addEventListener('click', startCoop);
+$('coopagain').addEventListener('click', () => startMatch(G.match + 1));
+$('coopmenu').addEventListener('click', () => { toAttract(); showScreen('home'); });
+$('ver').textContent = `Version ${APP_VERSION}`;
 $('host').addEventListener('click', hostMatch);
 $('joinform').addEventListener('submit', e => {
   e.preventDefault();
@@ -1308,6 +1452,33 @@ $('again').addEventListener('click', () => {
 });
 addEventListener('beforeunload', () => { try { Net.link?.send({ v: 1, bye: 1 }); } catch { } });
 
+/* Co-op HUD: each player's score and messages sit in their own half, turned to face them. */
+const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+function toScreen(x, z) { _v.set(x, 0, z).project(camera); return [(_v.x + 1) / 2 * innerWidth, (1 - _v.y) / 2 * innerHeight]; }
+function facing(s) {   // screen angle (deg) that makes text upright for the player at side s
+  const [x0, y0] = toScreen(0, sign(s) * 0.5), [x1, y1] = toScreen(0, sign(s) * 0.4);
+  return Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI + 90;
+}
+let lastCount = {};
+function layoutCoop(now) {
+  for (const s of ['a', 'b']) {
+    const S = s.toUpperCase(), ang = facing(s), g = sign(s);
+    const [sx, sy] = toScreen(g * (HW - 0.1), g * (HL - 0.14));    // in the player's right-hand corner, clear of the mallet
+    $('cscore' + S).style.transform = `translate(${sx}px,${sy}px) translate(-50%,-50%) rotate(${ang}deg)`;
+    $('cscore' + S).querySelector('.num').textContent = G.conceded[other(s)];
+    const [mx, my] = toScreen(0, g * 0.5);
+    const m = $('cmsg' + S);
+    m.style.transform = `translate(${mx}px,${my}px) translate(-50%,-50%) rotate(${ang}deg)`;
+    const el = m.firstElementChild;
+    if (G.phase === 'countdown') {
+      const k = Math.ceil((G.countEnd - now) / 800);
+      if (lastCount[s] !== k && k > 0) { lastCount[s] = k; el.className = 'cmsg count'; el.innerHTML = `<span class="pop">${k}</span>`; }
+    } else if (G.phase !== 'over' && el.innerHTML) { el.innerHTML = ''; lastCount[s] = null; }
+  }
+  const [cx, cy] = toScreen(0, 0), ca = $('cactions');
+  if (!ca.hidden) ca.style.transform = `translate(${cx}px,${cy}px) translate(-50%,-50%) rotate(${facing('a')}deg)`;
+}
+
 /* =====================================================================
    15. Frame loop
    ===================================================================== */
@@ -1330,6 +1501,8 @@ function frame(now) {
     ni.classList.toggle('warn', ms > 90 && ms <= 180); ni.classList.toggle('bad', ms > 180);
     if (Net.lastRemoteRecv && now - Net.lastRemoteRecv > 6000 && G.phase !== 'over') opponentLeft();
   }
+
+  if (G.mode === 'coop') layoutCoop(now);
 
   // countdown overlay
   const cEl = $('count');
@@ -1384,6 +1557,46 @@ function frame(now) {
     camera.position.y += (Math.random() - 0.5) * 0.012 * shake;
   }
   if (!window.__ah?.noRender) renderer.render(scene, camera);
+}
+
+/* ---------- iOS: no pinch-zoom, double-tap zoom or rubber-banding ---------- */
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault());
+document.addEventListener('touchmove', e => { if (!e.target.closest('input')) e.preventDefault(); }, { passive: false });
+document.addEventListener('dblclick', e => e.preventDefault());
+
+/* ---------- installable app: service worker + update prompt ---------- */
+let waitingWorker = null;
+function offerUpdate(w) {
+  waitingWorker = w;
+  // never interrupt a rally: the prompt waits until the menu is showing
+  const show = () => document.getElementById('update').classList.toggle('show', !!waitingWorker && document.body.classList.contains('menu'));
+  show();
+  if (!offerUpdate._obs) { offerUpdate._obs = new MutationObserver(show); offerUpdate._obs.observe(document.body, { attributes: true, attributeFilter: ['class'] }); }
+}
+document.getElementById('updatebtn').addEventListener('click', () => {
+  if (!waitingWorker) return;
+  document.getElementById('updatebtn').textContent = 'Updating…';
+  waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+});
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  let reloading = false;
+  const hadController = !!navigator.serviceWorker.controller;   // first visit: the new worker just takes over quietly
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading || !hadController) return;
+    reloading = true; location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    const consider = w => { if (w && navigator.serviceWorker.controller) offerUpdate(w); };   // first install: nothing to update
+    consider(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w && w.addEventListener('statechange', () => { if (w.state === 'installed') consider(w); });
+    });
+    // installed apps can stay open for days: check on return and every 30 minutes
+    const check = () => reg.update().catch(() => { });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => { });
 }
 
 /* ---------- boot ---------- */

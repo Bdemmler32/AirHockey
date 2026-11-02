@@ -1,0 +1,18 @@
+{
+  "name": "Air Hockey",
+  "short_name": "Air Hockey",
+  "description": "Air hockey for one or two players: online, on one device, or against the computer.",
+  "id": "./",
+  "start_url": "./?source=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#B9BEC7",
+  "theme_color": "#B9BEC7",
+  "categories": ["games"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
