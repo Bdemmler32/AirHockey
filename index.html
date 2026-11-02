@@ -48,6 +48,7 @@ html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-
 input{-webkit-user-select:text;user-select:text}
 button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none !important}
+html{background:#A1A7B1}          /* never white, even where iOS leaves a gap */
 html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
 body{
   font-family:var(--text);
@@ -57,11 +58,18 @@ body{
   -webkit-font-smoothing:antialiased;
   -webkit-tap-highlight-color:transparent;
 }
-canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:none}
+/* Everything lives in #app, sized in script to the true screen. iOS home-screen apps can report a
+   viewport shorter than the display; sizing from the screen closes the gap at the bottom. */
+#app{position:fixed;left:0;top:0;width:var(--app-w,100vw);height:var(--app-h,100vh);overflow:hidden;
+  background:radial-gradient(120% 80% at 50% 38%, var(--studio-hi) 0%, #BCC1C9 48%, var(--studio-lo) 100%)}
+/* a soft ink scrim under the iOS status bar so the white clock stays legible on the light backdrop */
+#app::before{content:"";position:absolute;left:0;right:0;top:0;height:calc(env(safe-area-inset-top,0px) * 1.7);
+  background:linear-gradient(rgba(26,33,64,.42), rgba(26,33,64,0));pointer-events:none;z-index:4}
+canvas#c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:none}
 body.menu canvas#c{cursor:default}
 
 /* ---------- HUD ---------- */
-#hud{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
+#hud{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
 body.playing #hud{opacity:1}
 .score{
   position:absolute;
@@ -97,18 +105,52 @@ body.playing #hud{opacity:1}
 .netinfo .dot{width:7px;height:7px;border-radius:50%;background:#3BA776}
 .netinfo.warn .dot{background:#E3A11B}
 .netinfo.bad .dot{background:#D9473B}
-#leave{
+#menubtn{
   pointer-events:auto;position:absolute;
-  top:calc(14px + var(--safe-t));right:calc(14px + var(--safe-r));
-  font:500 14px var(--text);color:var(--ink);
+  top:calc(12px + var(--safe-t));right:calc(12px + var(--safe-r));
+  width:40px;height:40px;border-radius:50%;border:0;cursor:pointer;padding:0;
+  display:grid;place-content:center;gap:4px;
   background:rgba(243,245,250,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border:0;border-radius:999px;padding:9px 16px;cursor:pointer;
-  box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 2px 10px rgba(26,33,64,.12);
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 2px 10px rgba(26,33,64,.14);
 }
-#leave:focus-visible, .btn:focus-visible, .link:focus-visible, input:focus-visible{outline:3px solid var(--cobalt);outline-offset:3px}
+body:not(.playing) #menubtn{visibility:hidden}
+#menubtn span{display:block;width:16px;height:2px;border-radius:2px;background:var(--ink)}
+#menubtn:active{transform:scale(.94)}
+/* the game menu: a sheet that drops from the button */
+#gamemenu{position:absolute;inset:0;z-index:6;background:rgba(26,33,64,.28);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);animation:fadeIn .2s both}
+#gamemenu[hidden]{display:none}
+#gamemenu .card{position:absolute;top:calc(60px + var(--safe-t));right:calc(12px + var(--safe-r));
+  width:min(340px, calc(100% - 24px));padding:18px 18px 16px;animation:sheetIn .28s cubic-bezier(.2,.8,.2,1) both;
+  transform-origin:top right}
+@keyframes fadeIn{from{opacity:0}}
+@keyframes sheetIn{from{opacity:0;transform:translateY(-8px) scale(.97)}}
+h3{font-family:var(--display);font-weight:800;font-size:34px;line-height:.9;margin:0 0 14px}
+.setting{margin:0 0 14px}
+.setting-row{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:600;margin-bottom:6px}
+.setting-row output{font-variant-numeric:tabular-nums;font-weight:500;color:var(--ink-soft)}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);margin-top:4px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:0;touch-action:pan-x}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;
+  background:linear-gradient(90deg,var(--cobalt) var(--fill,60%),rgba(26,33,64,.14) var(--fill,60%))}
+input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:rgba(26,33,64,.14)}
+input[type=range]::-moz-range-progress{height:6px;border-radius:3px;background:var(--cobalt)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;margin-top:-10px;
+  background:radial-gradient(circle at 38% 32%,#FFD064,var(--saffron) 55%,#E5930A);border:0;
+  box-shadow:0 2px 6px rgba(26,33,64,.35), inset 0 0 0 6px rgba(255,255,255,.18)}
+input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;border:0;background:var(--saffron);box-shadow:0 2px 6px rgba(26,33,64,.35)}
+input[type=range]:disabled{opacity:.5}
+.switchrow{display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:600;margin:0 0 16px}
+.switch{appearance:none;border:0;cursor:pointer;width:46px;height:28px;border-radius:14px;padding:3px;background:rgba(26,33,64,.18);transition:background .2s}
+.switch i{display:block;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(26,33,64,.3);transition:transform .2s}
+.switch[aria-checked="true"]{background:var(--cobalt)}
+.switch[aria-checked="true"] i{transform:translateX(18px)}
+.btn.secondary.danger{color:#A8302A}
+.fine.note{margin:6px 0 0}
+#menubtn:focus-visible, .switch:focus-visible, input[type=range]:focus-visible, .btn:focus-visible, .link:focus-visible, input:focus-visible{outline:3px solid var(--cobalt);outline-offset:3px}
 
 #count{
-  position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;
+  position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;
   font-family:var(--display);font-weight:900;color:var(--paper);
   font-size:min(38vw, 34vh);line-height:1;
   text-shadow:0 6px 30px rgba(26,33,64,.35);
@@ -117,7 +159,7 @@ body.playing #hud{opacity:1}
 @keyframes countIn{0%{transform:scale(1.35);opacity:0}25%{opacity:1}100%{transform:scale(.92);opacity:0}}
 
 #toast{
-  position:fixed;left:50%;bottom:calc(22px + var(--safe-b));transform:translate(-50%, 12px);
+  position:absolute;left:50%;bottom:calc(22px + var(--safe-b));transform:translate(-50%, 12px);
   background:var(--ink);color:var(--paper);font-size:14px;font-weight:500;
   padding:10px 16px;border-radius:12px;opacity:0;transition:.3s;pointer-events:none;max-width:calc(100vw - 32px)
 }
@@ -125,7 +167,7 @@ body.playing #hud{opacity:1}
 
 /* ---------- Menu panel ---------- */
 #panel{
-  position:fixed;
+  position:absolute;
   left:calc(clamp(16px, 4vw, 48px) + var(--safe-l));
   bottom:calc(clamp(16px, 5vh, 56px) + var(--safe-b));
   width:min(420px, calc(100vw - 32px));
@@ -146,7 +188,7 @@ body.menu #panel{opacity:1;transform:none;pointer-events:auto}
 @keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 h1{
   font-family:var(--display);font-weight:900;
-  font-size:clamp(64px, 11vh, 104px);
+  font-size:clamp(56px, 9.5vh, 104px);
   line-height:.82;letter-spacing:-.005em;
   margin:0 0 calc(.24em + 6px);          /* the y's tail drops .22em below the baseline */
 }
@@ -208,11 +250,12 @@ input.code::placeholder{color:rgba(26,33,64,.25);letter-spacing:.18em}
 .waiting .pulse{width:10px;height:10px;border-radius:50%;background:var(--cobalt);animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{transform:scale(.7);opacity:.45}50%{transform:scale(1);opacity:1}}
 .err{color:#B4322A;font-size:14px;font-weight:500;margin:10px 0 0;min-height:1em}
-.ver{margin-top:14px;font-size:12px;color:var(--ink-soft);opacity:.75}
+.ver{margin-top:14px;font-size:12px;color:var(--ink-soft)}
+.link.inline{margin:0;padding:0;font-size:12px}
 
 /* ---------- two players, one device ---------- */
 body.coop .score, body.coop .netinfo, body.coop #count{display:none}
-#coopui{position:fixed;inset:0;pointer-events:none;display:none}
+#coopui{position:absolute;inset:0;pointer-events:none;display:none}
 body.coop #coopui{display:block}
 .cblock{position:absolute;left:0;top:0;will-change:transform}
 .cscore{display:flex;align-items:center;gap:.2em;font-family:var(--display);font-weight:900;
@@ -234,13 +277,14 @@ body.coop #coopui{display:block}
 
 /* ---------- update prompt ---------- */
 #update{
-  position:fixed;left:50%;top:calc(14px + var(--safe-t));transform:translate(-50%,-140%);
+  position:absolute;left:50%;top:calc(14px + var(--safe-t));
+  transform:translate(-50%, calc(-100% - 30px - var(--safe-t)));visibility:hidden;white-space:nowrap;
   display:flex;align-items:center;gap:12px;z-index:5;
   background:var(--ink);color:var(--paper);border-radius:14px;padding:8px 8px 8px 16px;
   font-size:14px;font-weight:500;box-shadow:0 10px 40px rgba(26,33,64,.3);
-  transition:transform .45s cubic-bezier(.2,.8,.2,1);max-width:calc(100vw - 24px)
+  transition:transform .45s cubic-bezier(.2,.8,.2,1), visibility 0s linear .45s;max-width:calc(100% - 24px)
 }
-#update.show{transform:translate(-50%,0)}
+#update.show{transform:translate(-50%,0);visibility:visible;transition-delay:0s}
 #update button{appearance:none;border:0;border-radius:10px;padding:9px 14px;font:600 14px var(--text);
   background:var(--saffron);color:var(--ink);cursor:pointer}
 .result{font-family:var(--display);font-weight:800;font-size:28px;color:var(--ink-soft);margin:-4px 0 18px;font-variant-numeric:tabular-nums}
@@ -262,6 +306,7 @@ body.coop #coopui{display:block}
 </script>
 </head>
 <body class="menu">
+<div id="app">
 <canvas id="c" aria-label="Air hockey table"></canvas>
 
 <div id="hud" aria-live="polite">
@@ -271,7 +316,7 @@ body.coop #coopui{display:block}
     <div class="to">First to 7</div>
   </div>
   <div class="netinfo" id="netinfo" hidden><span class="dot"></span><span id="ping">–</span></div>
-  <button id="leave" type="button">Leave</button>
+  <button id="menubtn" type="button" aria-label="Game menu" aria-haspopup="dialog" aria-expanded="false"><span></span><span></span><span></span></button>
 </div>
 <div id="count"></div>
 <div id="coopui" aria-live="polite">
@@ -282,6 +327,23 @@ body.coop #coopui{display:block}
   <div class="cactions" id="cactions" hidden>
     <button class="btn primary" id="coopagain" type="button">Play again</button>
     <button class="btn secondary" id="coopmenu" type="button">Menu</button>
+  </div>
+</div>
+<div id="gamemenu" role="dialog" aria-modal="true" aria-labelledby="gmtitle" hidden>
+  <div class="card">
+    <h3 id="gmtitle">Paused</h3>
+      <div class="setting">
+        <div class="setting-row"><label for="air1">Air pressure</label><output class="airout">60%</output></div>
+        <input type="range" class="airin" id="air1" min="0" max="100" step="5" value="60">
+        <div class="scale"><span>Slower, more drag</span><span>Faster glide</span></div>
+        <p class="fine note airnote" hidden>The player who started the match sets the air.</p>
+      </div>
+      <div class="switchrow"><span id="snd1l">Sound</span><button type="button" class="switch soundsw" role="switch" aria-checked="true" aria-labelledby="snd1l"><i></i></button></div>
+    <div class="actions">
+      <button class="btn primary" id="resume" type="button">Resume <span class="puck"></span></button>
+      <button class="btn secondary" id="restart" type="button">Restart match <span class="puck"></span></button>
+      <button class="btn secondary danger" id="leave" type="button">Leave match <span class="puck"></span></button>
+    </div>
   </div>
 </div>
 <div id="update" role="status"><span>A new version is ready</span><button type="button" id="updatebtn">Update</button></div>
@@ -297,7 +359,7 @@ body.coop #coopui{display:block}
         <button class="btn secondary" id="coop">Two players, one device <span class="puck"></span></button>
         <button class="btn secondary" data-go="practice">Practice against the computer <span class="puck"></span></button>
       </div>
-      <div class="ver" id="ver"></div>
+      <div class="ver"><span id="ver"></span> · <button class="link inline" data-go="settings">Settings</button></div>
     </section>
 
     <section class="screen" data-screen="practice">
@@ -309,6 +371,18 @@ body.coop #coopui{display:block}
         <button class="btn secondary level" data-level="hard"><span><b>Hard</b><small>Fast hands, reads every angle</small></span><span class="pips" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></span></button>
       </div>
       <button class="link" data-go="home">Back</button>
+    </section>
+
+    <section class="screen" data-screen="settings">
+      <h2>Settings</h2>
+      <div class="setting">
+        <div class="setting-row"><label for="air2">Air pressure</label><output class="airout">60%</output></div>
+        <input type="range" class="airin" id="air2" min="0" max="100" step="5" value="60">
+        <div class="scale"><span>Slower, more drag</span><span>Faster glide</span></div>
+        <p class="fine note airnote" hidden>The player who started the match sets the air.</p>
+      </div>
+      <div class="switchrow"><span id="snd2l">Sound</span><button type="button" class="switch soundsw" role="switch" aria-checked="true" aria-labelledby="snd2l"><i></i></button></div>
+      <button class="link" data-go="home">Done</button>
     </section>
 
     <section class="screen" data-screen="friend">
@@ -365,6 +439,7 @@ body.coop #coopui{display:block}
   </div>
 </div>
 
+</div>
 <script type="module">
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -378,14 +453,22 @@ const PUCK_R = 0.045, PAD_R = 0.075;     // sized for thumbs: ~44pt mallet on a 
 const GOAL_HW = 0.18;          // 36 cm mouth: about 2.4 mallet-widths               // half width of the goal mouth
 const RAIL_T = 0.07, RAIL_H = 0.05, BUMP = 0.007;   // rails sit just outside a rubber bumper strip
 const STEP = 1 / 240;                // fixed physics step
-const MAX_PUCK = 4.6;                // m/s
+let MAX_PUCK = 4.6;                  // m/s — set by air pressure
 const PAD_MAX = 7.5;                 // paddle chase speed, m/s
-const FRICTION = 0.10;               // air cushion, very low
+let FRICTION = 0.10;                 // set by air pressure
+/* Air pressure 0–1. More air: the puck floats, glides further and tops out faster.
+   Less air: it drags on the surface and settles. */
+let AIR = 0.6;
+function setAir(a) {
+  AIR = clamp(a, 0, 1);
+  FRICTION = 0.05 + Math.pow(1 - AIR, 2) * 1.8;   // 0.05 /s (glassy) … 1.85 /s (sticky)
+  MAX_PUCK = 3.0 + 1.8 * AIR;                      // 3.0 … 4.8 m/s
+}
 const WALL_E = 0.9, PAD_E = 0.88;
 const HYST = PUCK_R;                 // handoff hysteresis around the centre line
 const WIN = 7;
 const COL = { you: 0xFFB21E, them: 0xFF6F8E };
-const APP_VERSION = '0.01';
+const APP_VERSION = '0.02';
 
 const sign = s => (s === 'a' ? 1 : -1);   // side a defends +z, side b defends -z
 const other = s => (s === 'a' ? 'b' : 'a');
@@ -446,7 +529,8 @@ function stepPuck(p, dt, pads) {
 }
 function padBounds(side) {
   const x = HW - PAD_R;
-  return side === 'a' ? { x0: -x, x1: x, z0: 0, z1: HL - PAD_R } : { x0: -x, x1: x, z0: -(HL - PAD_R), z1: 0 };
+  // the whole mallet stays in its own half, so mallets can meet at the line but never overlap
+  return side === 'a' ? { x0: -x, x1: x, z0: PAD_R, z1: HL - PAD_R } : { x0: -x, x1: x, z0: -(HL - PAD_R), z1: -PAD_R };
 }
 function movePad(pad, tx, tz, dt, side, maxSpeed = PAD_MAX) {
   const b = padBounds(side);
@@ -517,7 +601,7 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.55;
 
-const camera = new THREE.PerspectiveCamera(36, 1, 0.05, 40);
+const camera = new THREE.PerspectiveCamera(36, 1, 0.05, 200);
 
 const key = new THREE.DirectionalLight(0xFFF6EA, 2.6);
 key.position.set(-1.3, 3.2, 1.1);
@@ -746,6 +830,37 @@ const trail = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
   new THREE.MeshBasicMaterial({ map: trailTex, transparent: true, depthWrite: false, opacity: 0 }));
 scene.add(trail);
 
+/* ---------- screen size & safe areas ---------- */
+let VW = innerWidth, VH = innerHeight;
+const iosApp = navigator.standalone === true;      // launched from the iOS home screen
+function measureViewport() {
+  VW = innerWidth; VH = innerHeight;
+  if (iosApp) {
+    // iOS can report a viewport shorter than the screen in home-screen apps; the app owns the whole screen there
+    const portrait = matchMedia('(orientation: portrait)').matches;
+    const a = Math.min(screen.width, screen.height), b = Math.max(screen.width, screen.height);
+    VW = portrait ? a : b; VH = portrait ? b : a;
+  }
+  const app = document.getElementById('app');
+  app.style.setProperty('--app-w', VW + 'px'); app.style.setProperty('--app-h', VH + 'px');
+}
+const insetProbe = document.createElement('div');
+insetProbe.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+document.body.appendChild(insetProbe);
+function safe() {
+  if (window.__ah?.fakeInsets) return window.__ah.fakeInsets;     // test hook
+  const cs = getComputedStyle(insetProbe);
+  return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+}
+/** A fitting box in screen space (NDC), keeping clear of notches, the home bar and our own HUD. */
+function safeBox(top = 0, bottom = 0, side = 0) {
+  const i = safe();
+  return {
+    x0: -1 + 2 * (i.l + side) / VW, x1: 1 - 2 * (i.r + side) / VW,
+    y0: -1 + 2 * (i.b + bottom) / VH, y1: 1 - 2 * (i.t + top) / VH,
+  };
+}
+
 /* =====================================================================
    6. Camera: spherical rig, eased between attract orbit and play view
    ===================================================================== */
@@ -753,7 +868,7 @@ const cam = { theta: 0.6, elev: 0.62, dist: 3.4, look: 0, sx: 0, sy: 0, fov: 34 
 const camT = { theta: 0, elev: 1, dist: 3, look: 0, sx: 0, sy: 0, fov: 34 };
 /** Shift the table's centre on screen (fractions of the viewport) without changing perspective. */
 function applyShift(cm, sx, sy) {
-  const w = innerWidth, h = innerHeight;
+  const w = VW, h = VH;
   if (Math.abs(sx) < 1e-4 && Math.abs(sy) < 1e-4) { cm.aspect = w / h; cm.clearViewOffset(); return; }
   const fw = w * (1 + 2 * Math.abs(sx)), fh = h * (1 + 2 * Math.abs(sy));
   cm.aspect = fw / fh;                         // the virtual full frame's aspect, or the image stretches
@@ -767,12 +882,12 @@ function placeCamera(c, cm = camera) {
 }
 const probe = new THREE.PerspectiveCamera();
 const corners = [];
-for (const x of [-HW - BUMP - RAIL_T, HW + BUMP + RAIL_T]) for (const z of [-HL - BUMP - RAIL_T, HL + BUMP + RAIL_T]) for (const y of [0, RAIL_H + 0.06]) corners.push(new THREE.Vector3(x, y, z));
+for (const x of [-HW - BUMP - RAIL_T, HW + BUMP + RAIL_T]) for (const z of [-HL - BUMP - RAIL_T, HL + BUMP + RAIL_T]) for (const y of [-0.17, 0, RAIL_H + 0.06]) corners.push(new THREE.Vector3(x, y, z));
 // Find the closest distance where the whole table fits, leaving room for the HUD.
 function fitDist(theta, elev, look, box) {
-  probe.fov = camT.fov; probe.aspect = innerWidth / innerHeight; probe.near = camera.near; probe.far = camera.far;
+  probe.fov = camT.fov; probe.aspect = VW / VH; probe.near = camera.near; probe.far = camera.far;
   applyShift(probe, camT.sx, camT.sy); probe.updateProjectionMatrix();
-  let lo = 1, hi = 24;
+  let lo = 1, hi = 80;
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;
     placeCamera({ theta, elev, dist: mid, look }, probe);
@@ -792,45 +907,51 @@ function setPlayCamera() {
   camT.elev = portrait ? 1.12 : 0.92;
   camT.fov = portrait ? 26 : 28;   // a longer lens keeps the near end from splaying
   camT.look = -sign(G.me) * 0.06;
-  camT.sx = camT.sy = 0;
-  camT.dist = fitDist(camT.theta, camT.elev, camT.look, { x0: -0.93, x1: 0.93, y0: -0.93, y1: portrait ? 0.74 : 0.86 });
+  const box = safeBox(portrait ? 110 : 60, 14, 14);                  // room for the score
+  camT.sx = 0; camT.sy = (box.y0 + box.y1) / 4;                      // centre the table in the free space
+  camT.dist = fitDist(camT.theta, camT.elev, camT.look, box);
 }
 function setCoopCamera() {
   // straight down, long lens: both ends look the same, so neither player is favoured
-  const landscape = innerWidth > innerHeight;
+  const landscape = VW > VH;
   camT.theta = landscape ? Math.PI / 2 : 0;
-  camT.elev = 1.53; camT.fov = 22; camT.look = 0; camT.sx = camT.sy = 0;
-  camT.dist = fitDist(camT.theta, camT.elev, 0, { x0: -0.95, x1: 0.95, y0: -0.93, y1: 0.93 });
+  camT.elev = 1.53; camT.fov = 22; camT.look = 0;
+  const box = safeBox(landscape ? 10 : 30, 10, landscape ? 30 : 10);
+  camT.sx = (box.x0 + box.x1) / 4; camT.sy = (box.y0 + box.y1) / 4;
+  camT.dist = fitDist(camT.theta, camT.elev, 0, box);
 }
 function setAttractCamera() {
   // frame the table in the space the menu card leaves free
-  const w = innerWidth, h = innerHeight, side = w >= 760;
+  const w = VW, h = VH, side = w >= 760;
   const pr = document.getElementById('panel').getBoundingClientRect();
+  const sb = safeBox(12, 12, 12);
   let box;
   if (side) {
     const x0 = (pr.right + 24) / w * 2 - 1;
+    box = { x0: x0, x1: sb.x1, y0: sb.y0, y1: sb.y1 };
     camT.sx = (x0 + 1) / 4; camT.sy = 0;
-    box = { x0: x0, x1: 0.97, y0: -0.97, y1: 0.97 };
     camT.elev = 0.56; camT.fov = 32;
   } else {
-    const y0 = 1 - (pr.top - 12) / h * 2;
-    camT.sx = 0; camT.sy = (y0 + 1) / 4;
-    box = { x0: -0.96, x1: 0.96, y0: y0, y1: 0.94 };
+    const y0 = 1 - (pr.top + 40) / h * 2;          // the base tucks just behind the frosted card
+    box = { x0: sb.x0, x1: sb.x1, y0: y0, y1: sb.y1 };
+    camT.sx = 0; camT.sy = (y0 + box.y1) / 4;      // centre the table in the space above the card
     camT.elev = 0.72; camT.fov = 34;
   }
   camT.look = 0;
   // the table orbits, so fit the worst angle; a little overscan on wide screens is deliberate
   let d = 0;
   for (let i = 0; i < 12; i++) d = Math.max(d, fitDist(i * Math.PI / 12, camT.elev, 0, box));
-  camT.dist = d * (side ? 0.9 : 0.98);
+  camT.dist = d * (side ? 0.92 : 1.0);
 }
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  measureViewport();
+  const w = VW, h = VH;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   if (G.mode === 'attract') setAttractCamera(); else if (G.mode === 'coop') setCoopCamera(); else setPlayCamera();
 }
 addEventListener('resize', resize);
+addEventListener('orientationchange', () => setTimeout(resize, 250));   // iOS settles its sizes late
 
 /* =====================================================================
    7. Input: pointer → table plane, with a touch offset so the finger
@@ -883,8 +1004,9 @@ let actx = null, lastClack = 0;
 function ensureAudio() {
   try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch { }
 }
+let soundOn = true;
 function clack(strength, kind) {
-  if (!actx || G.mode === 'attract') return;
+  if (!actx || !soundOn || G.mode === 'attract') return;
   const now = actx.currentTime;
   if (now - lastClack < 0.035) return;
   lastClack = now;
@@ -905,7 +1027,7 @@ function clack(strength, kind) {
   }
 }
 function chime(up) {
-  if (!actx) return;
+  if (!actx || !soundOn) return;
   const now = actx.currentTime;
   (up ? [660, 880, 1320] : [440, 330]).forEach((f, i) => {
     const o = actx.createOscillator(), g = actx.createGain();
@@ -1026,6 +1148,7 @@ function sendState(now) {
     ep: G.epoch, own: G.owner, puck: [r(q.x), r(q.z), r(q.vx, 3), r(q.vz, 3)],
     hold: G.holdUntil > now ? Math.round(G.holdUntil - now) : 0,
     con: G.conceded[G.me], m: G.match, want: G.want, ph: G.phase,
+    air: Net.role === 'host' ? AIR : undefined,
   });
 }
 function onPacket(m) {
@@ -1048,6 +1171,7 @@ function onPacket(m) {
   if (Net.pad.length > 40) Net.pad.shift();
 
   Net.remoteM = m.m; Net.remoteWant = m.want;
+  if (Net.role === 'join' && typeof m.air === 'number' && Math.abs(m.air - AIR) > 1e-6) { setAir(m.air); syncSettingsUI(); }
   if (G.mode !== 'online') return;
 
   // a rematch both sides asked for
@@ -1206,7 +1330,7 @@ function concede(defender) {
   G.epoch++;                        // force everyone to snap to the new serve
   G.owner = defender;
   servePuck(defender);              // the side that was scored on gets the puck
-  G.holdUntil = performance.now() + 1100;
+  G.holdUntil = performance.now() + 800;
   onGoal(defender);
 }
 function endMatch(winner) {
@@ -1259,6 +1383,8 @@ function startCoop() {
   keepAwake(true);
 }
 function toAttract() {
+  G.paused = false; $('gamemenu').hidden = true;
+  if (Net.role === 'join') { loadSettings(); }          // drop the host's air pressure, back to ours
   document.body.classList.remove('coop');
   topDownLook(false);
   keepAwake(false);
@@ -1324,6 +1450,7 @@ async function startOnline(code, role) {
    ===================================================================== */
 let simEvents = { hit: 0, wall: 0 };
 function simStep(dt, now) {
+  if (G.paused) return;
   const me = G.me, opp = other(me);
   if (G.mode === 'attract') { aiMove('a', dt, DEMO); aiMove('b', dt, DEMO); }
   else {
@@ -1347,6 +1474,8 @@ function simStep(dt, now) {
   }
   if (G.phase !== 'play' || now < G.holdUntil) {
     if (G.phase === 'countdown' && now >= G.countEnd) G.phase = 'play';
+    // the puck is held but still solid: a mallet slides around it, never over it
+    for (const s of ['a', 'b']) keepOff(G.pads[s], s);
     return;
   }
   const p = G.puck;
@@ -1366,7 +1495,7 @@ function simStep(dt, now) {
     if (G.predictedGoal) return;
     const pads = [G.pads[opp]];
     const mySide = sign(me) * p.z > HYST;
-    if (mySide) pads.push(G.pads[me]);
+    if (sign(me) * p.z > 0) pads.push(G.pads[me]);
     const r = stepPuck(p, dt, pads);
     if (r.hit > 0.001 && mySide && Math.hypot(p.x - G.pads[me].x, p.z - G.pads[me].z) < PAD_R + PUCK_R + 0.002) {
       Net.provisional = { epoch: G.epoch, at: now };
@@ -1375,6 +1504,16 @@ function simStep(dt, now) {
     if (r.wall > simEvents.wall) simEvents.wall = r.wall;
     if (r.goal) { G.predictedGoal = now; p.vx = p.vz = 0; }
   }
+}
+
+function keepOff(q, side) {
+  const p = G.puck, R = PAD_R + PUCK_R;
+  const dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz);
+  if (d >= R) return;
+  const nx = d > 1e-6 ? dx / d : 0, nz = d > 1e-6 ? dz / d : sign(side);
+  const b = padBounds(side);
+  q.x = clamp(p.x + nx * R, b.x0, b.x1); q.z = clamp(p.z + nz * R, b.z0, b.z1);
+  q.vx = q.vz = 0;
 }
 
 /* =====================================================================
@@ -1442,7 +1581,55 @@ $('copycode').addEventListener('click', async () => {
 });
 $('cancelhost').addEventListener('click', () => { toAttract(); showScreen('friend'); });
 $('canceljoin').addEventListener('click', () => { toAttract(); showScreen('friend'); });
-$('leave').addEventListener('click', () => { toAttract(); showScreen('home'); });
+/* ---------- settings (persisted) ---------- */
+function loadSettings() {
+  try {
+    const a = parseFloat(localStorage.getItem('ah-air')); if (!isNaN(a)) setAir(a); else setAir(0.6);
+    soundOn = localStorage.getItem('ah-sound') !== 'off';
+  } catch { setAir(0.6); }
+}
+function syncSettingsUI() {
+  const locked = G.mode === 'online' && Net.role === 'join';
+  document.querySelectorAll('.airin').forEach(el => {
+    el.value = Math.round(AIR * 100); el.disabled = locked;
+    el.style.setProperty('--fill', Math.round(AIR * 100) + '%');
+  });
+  document.querySelectorAll('.airout').forEach(el => el.textContent = Math.round(AIR * 100) + '%');
+  document.querySelectorAll('.airnote').forEach(el => el.hidden = !locked);
+  document.querySelectorAll('.soundsw').forEach(el => el.setAttribute('aria-checked', String(soundOn)));
+}
+document.querySelectorAll('.airin').forEach(el => el.addEventListener('input', () => {
+  setAir(el.value / 100);
+  try { localStorage.setItem('ah-air', String(AIR)); } catch { }
+  syncSettingsUI();
+}));
+document.querySelectorAll('.soundsw').forEach(el => el.addEventListener('click', () => {
+  soundOn = !soundOn; ensureAudio();
+  try { localStorage.setItem('ah-sound', soundOn ? 'on' : 'off'); } catch { }
+  syncSettingsUI();
+}));
+loadSettings(); syncSettingsUI();
+
+/* ---------- in-game menu ---------- */
+function openMenu() {
+  const online = G.mode === 'online';
+  if (!online) G.paused = true;               // you can't pause someone else's game
+  $('gmtitle').textContent = online ? 'Match menu' : 'Paused';
+  $('restart').hidden = online;
+  syncSettingsUI();
+  $('gamemenu').hidden = false; $('menubtn').setAttribute('aria-expanded', 'true');
+  $('resume').focus({ preventScroll: true });
+}
+function closeMenu() {
+  $('gamemenu').hidden = true; $('menubtn').setAttribute('aria-expanded', 'false');
+  G.paused = false;
+}
+$('menubtn').addEventListener('click', openMenu);
+$('resume').addEventListener('click', closeMenu);
+$('gamemenu').addEventListener('click', e => { if (e.target.id === 'gamemenu') closeMenu(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && !$('gamemenu').hidden) closeMenu(); });
+$('restart').addEventListener('click', () => { closeMenu(); startMatch(G.match + 1); });
+$('leave').addEventListener('click', () => { closeMenu(); toAttract(); showScreen('home'); });
 $('tomenu').addEventListener('click', () => { toAttract(); showScreen('home'); });
 $('again').addEventListener('click', () => {
   if (G.mode === 'solo') { startMatch(G.match + 1); return; }
@@ -1454,7 +1641,7 @@ addEventListener('beforeunload', () => { try { Net.link?.send({ v: 1, bye: 1 });
 
 /* Co-op HUD: each player's score and messages sit in their own half, turned to face them. */
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
-function toScreen(x, z) { _v.set(x, 0, z).project(camera); return [(_v.x + 1) / 2 * innerWidth, (1 - _v.y) / 2 * innerHeight]; }
+function toScreen(x, z) { _v.set(x, 0, z).project(camera); return [(_v.x + 1) / 2 * VW, (1 - _v.y) / 2 * VH]; }
 function facing(s) {   // screen angle (deg) that makes text upright for the player at side s
   const [x0, y0] = toScreen(0, sign(s) * 0.5), [x1, y1] = toScreen(0, sign(s) * 0.4);
   return Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI + 90;
@@ -1532,7 +1719,7 @@ function frame(now) {
   }
 
   fieldU.uPuck.value.set(px, pz);
-  fieldU.uAir.value = 0.55 + 0.45 * Math.sin(time * 3.1) * 0.25 + clamp(sp / 4, 0, 0.45);
+  fieldU.uAir.value = (0.2 + 0.8 * AIR) * (0.55 + 0.11 * Math.sin(time * 3.1) + clamp(sp / 4, 0, 0.45));
   if (fieldU.uWaveT.value >= 0) { fieldU.uWaveT.value += dt; if (fieldU.uWaveT.value > 1.5) fieldU.uWaveT.value = -1; }
   for (const s of ['a', 'b']) {
     const gl = goalLights[s];
@@ -1601,6 +1788,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
 
 /* ---------- boot ---------- */
 resize();
+document.fonts?.ready.then(resize);                 // the menu card grows once its fonts arrive
 servePuck('a');
 paintMallets();
 updateScore(true);

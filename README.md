@@ -1,4 +1,4 @@
-# Air Hockey v0.01
+# Air Hockey v0.02
 
 An installable web app (PWA). Static files only: no build step, no server code.
 
@@ -47,9 +47,21 @@ After the first launch the game works offline. Online play still needs a connect
 - Each version keeps its files in its own cache, and old caches are deleted on activation.
 - three.js is pinned to `0.170.0`, so it's cached once and kept between versions. If you change the three.js version, update it in both `index.html` (import map) and `sw.js` (`CDN` list).
 
+## Settings
+
+**Air pressure** is in Settings on the home screen and in the in-game menu (the round button at the top right).
+- More air: the puck floats, glides further and reaches higher top speeds.
+- Less air: it drags on the surface and settles.
+- The default is 60%.
+- In an online match, the player who started the match sets it for both players.
+
+**Sound** can be switched off in the same places. Both settings are remembered on the device.
+
 ## iOS notes
 
-- The app runs full-screen with the status bar over the backdrop, and the layout respects the notch and home indicator.
+- The app fills the whole screen, down past the home indicator.
+- A soft shade under the status bar keeps the clock readable.
+- The game keeps clear of the notch, the status bar and the home indicator.
 - Pinch-zoom, double-tap zoom, text selection and rubber-band scrolling are turned off.
 - The screen stays awake during a game where iOS allows it.
 - For two-player mode on a phone lying flat, turn on Portrait Orientation Lock in Control Center, so the screen doesn't flip as the phone is passed around.
